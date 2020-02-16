@@ -1,6 +1,7 @@
 package me.theforbiddenai.jenkinsparserkotlin.entities
 
 import me.theforbiddenai.jenkinsparserkotlin.Cache
+import me.theforbiddenai.jenkinsparserkotlin.Jenkins
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
@@ -11,19 +12,25 @@ private val methodNameRegex = "\\w+\\s?\\(.*\\)".toRegex()
 private val whitespaceRegex = "\\s+".toRegex()
 
 data class ClassInformation internal constructor(
+    val jenkins: Jenkins,
     override var url: String,
     override var name: String
 ) : Information() {
 
     private val classDocument = Jsoup.connect(url).get()
 
-    private val methodMap: MutableMap<String, Element> = mutableMapOf()
-    private val enumMap: MutableMap<String, Element> = mutableMapOf()
-    private val fieldMap: MutableMap<String, Element> = mutableMapOf()
+    private var nestedClassMap: MutableMap<String, String> = mutableMapOf()
+    private var methodMap: MutableMap<String, Element> = mutableMapOf()
+    private var enumMap: MutableMap<String, Element> = mutableMapOf()
+    private var fieldMap: MutableMap<String, Element> = mutableMapOf()
 
-    val methodList: MutableList<String> = mutableListOf()
-    val enumList: MutableList<String> = mutableListOf()
-    val fieldList: MutableList<String> = mutableListOf()
+    var nestedClassList: MutableList<String> = mutableListOf()
+    var methodList: MutableList<String> = mutableListOf()
+    var enumList: MutableList<String> = mutableListOf()
+    var fieldList: MutableList<String> = mutableListOf()
+
+    private var inheritedMethodMap: MutableMap<String, ClassInformation> = mutableMapOf()
+    var inheritedMethodList: MutableList<String> = mutableListOf()
 
     override lateinit var description: String
     override lateinit var rawDescription: String
@@ -43,15 +50,48 @@ data class ClassInformation internal constructor(
     }
 
     /**
-     * Retrieves all methods with a specified name
+     * Retrieves a nested class with the specified name
+     *
+     * @param query The name of the nested class being searched for
+     * @return Returns the found nested classes
+     */
+    fun retrieveNestedClass(query: String): ClassInformation {
+        nestedClassMap.filter { (className, _) ->
+            val modifiedClassName = className.replace("$name.", "").trim()
+            val modifiedQuery = query.replace("$name.", "").trim()
+
+            modifiedClassName.equals(modifiedQuery, true)
+        }
+            .forEach { (className, classUrl) -> return ClassInformation(jenkins, classUrl, className) }
+
+        throw Exception("Could not find a nested class with the name $query in $name")
+    }
+
+    /**
+     * Retrieves all methods defined in the class and all inherited methods with a specified name
      *
      * @param query The name of the methods being searched for
      * @return Returns a list of all found methods
      */
-    fun retrieveMethods(query: String): List<MethodInformation> {
+    fun searchAllMethods(query: String): List<MethodInformation> {
+        val foundMethodList: MutableList<MethodInformation> = mutableListOf()
+
+        foundMethodList.addAll(searchInheritedMethods(query))
+        foundMethodList.addAll(searchMethods(query))
+
+        return foundMethodList
+    }
+
+    /**
+     * Retrieves all methods defined in the class with a specified name
+     *
+     * @param query The name of the methods being searched for
+     * @return Returns a list of all found methods
+     */
+    fun searchMethods(query: String): List<MethodInformation> {
         val foundMethodList = mutableListOf<MethodInformation>()
 
-        retrieveInfo(methodMap, query).forEach { (methodName, methodUrl) ->
+        retrieveData(methodMap, query).forEach { (methodName, methodUrl) ->
             val fieldElement = methodMap[methodName] ?: return@forEach
             foundMethodList.add(MethodInformation(this, fieldElement, methodUrl, methodName))
         }
@@ -60,13 +100,31 @@ data class ClassInformation internal constructor(
     }
 
     /**
+     * Retrieves all inherited methods in the class with a specified name
+     *
+     * @param query The name of the methods being searched for
+     * @return Returns a list of all found methods
+     */
+    fun searchInheritedMethods(query: String): List<MethodInformation> {
+        val foundMethodMap = mutableListOf<MethodInformation>()
+
+        inheritedMethodMap.filter { (methodName, _) -> methodName.equals(query, true) }
+            .forEach { (methodName, classInformation) ->
+                val retrieveMethods = classInformation.searchMethods(methodName)
+                foundMethodMap.addAll(retrieveMethods)
+            }
+
+        return foundMethodMap
+    }
+
+    /**
      * Retrieves the enum with a specified name
      *
      * @param query The name of the enum being searched for
-     * @return The found enum
+     * @return Returns the found enum
      */
     fun retrieveEnum(query: String): EnumInformation {
-        retrieveInfo(enumMap, query).forEach { (enumName, enumUrl) ->
+        retrieveData(enumMap, query).forEach { (enumName, enumUrl) ->
             val fieldElement = enumMap[enumName] ?: return@forEach
             return EnumInformation(this, fieldElement, enumUrl, enumName)
         }
@@ -81,7 +139,7 @@ data class ClassInformation internal constructor(
      * @return Returns the found field
      */
     fun retrieveField(query: String): FieldInformation {
-        retrieveInfo(fieldMap, query).forEach { (fieldName, fieldUrl) ->
+        retrieveData(fieldMap, query).forEach { (fieldName, fieldUrl) ->
             val fieldElement = fieldMap[fieldName] ?: return@forEach
             return FieldInformation(this, fieldElement, fieldUrl, fieldName)
         }
@@ -90,14 +148,14 @@ data class ClassInformation internal constructor(
     }
 
     /**
-     * Retrieves the name and url from a query and a map
+     * Retrieves the name and url from a query
      *
      * @param infoMap The map being searched in
      * @param query The information being searched for
-     * @return A map containing the name and url of the found information
+     * @return A map containing the name and url of the found data
      */
-    private fun retrieveInfo(infoMap: MutableMap<String, Element>, query: String): MutableMap<String, String> {
-        val foundList = mutableMapOf<String, String>()
+    private fun retrieveData(infoMap: MutableMap<String, Element>, query: String): MutableMap<String, String> {
+        val foundDataMap = mutableMapOf<String, String>()
 
         infoMap.filter { (infoName, _) ->
             val modifiedName = infoName.substringBefore("(").trim()
@@ -109,10 +167,76 @@ data class ClassInformation internal constructor(
                 val anchorAttr = anchorElement.attr("id") ?: anchorElement.attr("name")
                 val infoUrl = "$url#${anchorAttr}"
 
-                foundList[infoName] = infoUrl
+                foundDataMap[infoName] = infoUrl
             }
 
-        return foundList
+        return foundDataMap
+    }
+
+    /**
+     * Retrieves the name and url of items from a table
+     *
+     * @param tableId The id of the table the data is coming from
+     * @return A map containing the name and url of the found data
+     */
+    private fun retrieveLinkDataFromTable(tableId: String): MutableMap<String, String> {
+        val foundDataMap = mutableMapOf<String, String>()
+
+        val anchor = classDocument.selectFirst("a[id=$tableId]")
+            ?: classDocument.selectFirst("a[name=$tableId]")
+            ?: return foundDataMap
+
+        val blockList = anchor.parent()
+
+        val tableBody = blockList.selectFirst("tbody")
+
+        tableBody.select("th.colSecond")
+            .filter { it.attr("scope").equals("row", true) }
+            .forEach {
+                val itemName = it.text()
+                val anchorHref = it.selectFirst("a").attr("href")
+
+                val itemUrl = "${url.substringBeforeLast("/")}/$anchorHref"
+
+                foundDataMap[itemName] = itemUrl
+            }
+
+        return foundDataMap
+    }
+
+    /**
+     * Retrieves the name and class information of inherited items from a table
+     *
+     * @param tableId The id of the table the data is coming from
+     * @return A map containing the name and class information of the the found data
+     */
+    private fun retrieveInheritedDataFromTable(tableId: String): MutableMap<String, ClassInformation> {
+        val foundDataMap = mutableMapOf<String, ClassInformation>()
+
+        val anchor = classDocument.selectFirst("a[id=$tableId]")
+            ?: classDocument.selectFirst("a[name=$tableId]")
+            ?: return foundDataMap
+
+        val blockList = anchor.parent()
+
+        val inheritedAnchorList = blockList.select("a").filter {
+            val attr = it.attr("id") ?: it.attr("name") ?: return@filter false
+            return@filter attr.contains("inherited", true)
+        }
+
+        val inheritedAnchor = if (inheritedAnchorList.isEmpty()) return foundDataMap else inheritedAnchorList[0]
+
+        val inheritedBlockList = inheritedAnchor.parent()
+        inheritedBlockList.select("a").filter { it.hasAttr("href") && !it.hasAttr("title") }
+            .forEach {
+                val className = inheritedBlockList.selectFirst("h3").selectFirst("a").text()
+                val foundClass = jenkins.retrieveClass(className)
+
+                foundDataMap[it.text()] = foundClass
+
+            }
+
+        return foundDataMap
     }
 
     /**
@@ -141,7 +265,7 @@ data class ClassInformation internal constructor(
                     .replace(whitespaceRegex, " ").trim()
 
                 methodNameRegex.find(itemName)?.value
-                    ?: throw Exception("Failed to match method signature: $signature");
+                    ?: throw Exception("Failed to match method signature: $signature")
             } else {
                 itemName.substringAfterLast(" ")
             }
@@ -163,14 +287,20 @@ data class ClassInformation internal constructor(
         description = descriptionElement?.text() ?: "N/A"
         rawDescription = descriptionElement?.html() ?: "N/A"
 
-        methodMap.putAll(getItemList("method.detail"))
-        methodList.addAll(methodMap.keys)
+        nestedClassMap = retrieveLinkDataFromTable("nested.class.summary")
+        nestedClassList = nestedClassMap.keys.toMutableList()
 
-        enumMap.putAll(getItemList("enum.constant.detail"))
-        enumList.addAll(enumMap.keys)
+        methodMap = getItemList("method.detail")
+        methodList = methodMap.keys.toMutableList()
 
-        fieldMap.putAll(getItemList("field.detail"))
-        fieldList.addAll(fieldMap.keys)
+        enumMap = getItemList("enum.constant.detail")
+        enumList = enumMap.keys.toMutableList()
+
+        fieldMap = getItemList("field.detail")
+        fieldList = fieldMap.keys.toMutableList()
+
+        inheritedMethodMap = retrieveInheritedDataFromTable("method.summary")
+        inheritedMethodList = inheritedMethodMap.keys.toMutableList()
     }
 
     private fun retrieveDataFromCache(classInfo: ClassInformation) {
@@ -180,14 +310,20 @@ data class ClassInformation internal constructor(
         extraInformation = classInfo.extraInformation
         rawExtraInformation = classInfo.rawExtraInformation
 
-        methodMap.putAll(classInfo.methodMap)
-        methodList.addAll(classInfo.methodList)
+        nestedClassMap = classInfo.nestedClassMap
+        nestedClassList = classInfo.nestedClassList
 
-        enumMap.putAll(classInfo.enumMap)
-        enumList.addAll(classInfo.enumList)
+        methodMap = classInfo.methodMap
+        methodList = classInfo.methodList
 
-        fieldMap.putAll(classInfo.fieldMap)
-        fieldList.addAll(classInfo.fieldList)
+        enumMap = classInfo.enumMap
+        enumList = classInfo.enumList
+
+        fieldMap = classInfo.fieldMap
+        fieldList = classInfo.fieldList
+
+        inheritedMethodMap = classInfo.inheritedMethodMap
+        inheritedMethodList = classInfo.inheritedMethodList
     }
 
 }

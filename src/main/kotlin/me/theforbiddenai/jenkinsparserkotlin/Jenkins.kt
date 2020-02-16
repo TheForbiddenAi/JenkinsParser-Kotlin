@@ -31,7 +31,7 @@ class Jenkins(private var url: String) {
         classList.keys.filter { it.equals(className, true) }
             .forEach {
                 val classUrl = classList[it] ?: return@forEach
-                classInfoList.add(ClassInformation(classUrl, className.toLowerCase()))
+                classInfoList.add(ClassInformation(this, classUrl, className.toLowerCase()))
             }
 
         return classInfoList
@@ -47,7 +47,7 @@ class Jenkins(private var url: String) {
         val classUrl = classList[className.toLowerCase()]
             ?: throw Exception("Failed to find a class with the name of $className")
 
-        return ClassInformation(classUrl, className.toLowerCase())
+        return ClassInformation(this, classUrl, className.toLowerCase())
     }
 
     /**
@@ -58,7 +58,7 @@ class Jenkins(private var url: String) {
      * @return A list of all found methods
      */
     fun searchMethods(classInfo: ClassInformation, methodName: String): List<MethodInformation> {
-        return classInfo.retrieveMethods(methodName)
+        return classInfo.searchMethods(methodName)
     }
 
     fun searchMethods(className: String, methodName: String): List<MethodInformation> {

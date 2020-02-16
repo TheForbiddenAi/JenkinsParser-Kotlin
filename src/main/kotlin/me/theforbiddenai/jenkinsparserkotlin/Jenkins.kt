@@ -16,7 +16,13 @@ class Jenkins(private var url: String) {
     }
 
     fun search(query: String): List<Information> {
-        TODO("Not implemented")
+        TODO("NOT IMPLEMENTED")
+
+        val modifiedQuery = query.replace("#", ".").removeSuffix(".")
+        val foundInformation = mutableListOf<Information>()
+
+        return foundInformation
+
     }
 
     /**
@@ -42,6 +48,7 @@ class Jenkins(private var url: String) {
      *
      * @param className The name of the class being searched for
      * @return The found class object
+     * @throws Exception If the class is not found
      */
     fun retrieveClass(className: String): ClassInformation {
         val classUrl = classList[className.toLowerCase()]

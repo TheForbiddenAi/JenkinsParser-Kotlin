@@ -30,7 +30,12 @@ data class ClassInformation internal constructor(
     var fieldList: MutableList<String> = mutableListOf()
 
     private var inheritedMethodMap: MutableMap<String, ClassInformation> = mutableMapOf()
+    private var inheritedEnumMap: MutableMap<String, ClassInformation> = mutableMapOf()
+    private var inheritedFieldMap: MutableMap<String, ClassInformation> = mutableMapOf()
+
     var inheritedMethodList: MutableList<String> = mutableListOf()
+    var inheritedEnumList: MutableList<String> = mutableListOf()
+    var inheritedFieldList: MutableList<String> = mutableListOf()
 
     override lateinit var description: String
     override lateinit var rawDescription: String
@@ -92,6 +97,7 @@ data class ClassInformation internal constructor(
         val foundMethodList = mutableListOf<MethodInformation>()
 
         retrieveData(methodMap, query).forEach { (methodName, methodUrl) ->
+
             val fieldElement = methodMap[methodName] ?: return@forEach
             foundMethodList.add(MethodInformation(this, fieldElement, methodUrl, methodName))
         }
@@ -107,6 +113,7 @@ data class ClassInformation internal constructor(
      */
     fun searchInheritedMethods(query: String): List<MethodInformation> {
         val foundMethodMap = mutableListOf<MethodInformation>()
+
 
         inheritedMethodMap.filter { (methodName, _) -> methodName.equals(query, true) }
             .forEach { (methodName, classInformation) ->
@@ -188,7 +195,7 @@ data class ClassInformation internal constructor(
 
         val blockList = anchor.parent()
 
-        val tableBody = blockList.selectFirst("tbody")
+        val tableBody = blockList.selectFirst("tbody") ?: return foundDataMap
 
         tableBody.select("th.colSecond")
             .filter { it.attr("scope").equals("row", true) }
@@ -220,21 +227,26 @@ data class ClassInformation internal constructor(
         val blockList = anchor.parent()
 
         val inheritedAnchorList = blockList.select("a").filter {
-            val attr = it.attr("id") ?: it.attr("name") ?: return@filter false
+            val attr = if(it.hasAttr("id")) it.attr("id") else it.attr("name")
             return@filter attr.contains("inherited", true)
         }
 
-        val inheritedAnchor = if (inheritedAnchorList.isEmpty()) return foundDataMap else inheritedAnchorList[0]
+        inheritedAnchorList.forEach { foundAnchor ->
+            val inheritedBlockList = foundAnchor.parent().selectFirst("li.blocklist")
+            val className = inheritedBlockList.selectFirst("h3").selectFirst("a").text()
 
-        val inheritedBlockList = inheritedAnchor.parent()
-        inheritedBlockList.select("a").filter { it.hasAttr("href") && !it.hasAttr("title") }
-            .forEach {
-                val className = inheritedBlockList.selectFirst("h3").selectFirst("a").text()
+            try {
                 val foundClass = jenkins.retrieveClass(className)
 
-                foundDataMap[it.text()] = foundClass
-
+                val itemList = inheritedBlockList.selectFirst("code")
+                itemList.select("a").forEach {
+                    foundDataMap[it.text()] = foundClass
+                }
+            } catch (ex: Exception) {
+                return@forEach
             }
+
+        }
 
         return foundDataMap
     }
@@ -288,19 +300,22 @@ data class ClassInformation internal constructor(
         rawDescription = descriptionElement?.html() ?: "N/A"
 
         nestedClassMap = retrieveLinkDataFromTable("nested.class.summary")
-        nestedClassList = nestedClassMap.keys.toMutableList()
-
         methodMap = getItemList("method.detail")
-        methodList = methodMap.keys.toMutableList()
-
         enumMap = getItemList("enum.constant.detail")
-        enumList = enumMap.keys.toMutableList()
-
         fieldMap = getItemList("field.detail")
+
+        nestedClassList = nestedClassMap.keys.toMutableList()
+        methodList = methodMap.keys.toMutableList()
+        enumList = enumMap.keys.toMutableList()
         fieldList = fieldMap.keys.toMutableList()
 
         inheritedMethodMap = retrieveInheritedDataFromTable("method.summary")
+        inheritedEnumMap = retrieveInheritedDataFromTable("enum.constant.summary")
+        inheritedFieldMap = retrieveInheritedDataFromTable("field.summary")
+
         inheritedMethodList = inheritedMethodMap.keys.toMutableList()
+        inheritedEnumList = inheritedEnumMap.keys.toMutableList()
+        inheritedFieldList = inheritedFieldMap.keys.toMutableList()
     }
 
     private fun retrieveDataFromCache(classInfo: ClassInformation) {
@@ -311,19 +326,22 @@ data class ClassInformation internal constructor(
         rawExtraInformation = classInfo.rawExtraInformation
 
         nestedClassMap = classInfo.nestedClassMap
-        nestedClassList = classInfo.nestedClassList
-
         methodMap = classInfo.methodMap
-        methodList = classInfo.methodList
-
         enumMap = classInfo.enumMap
-        enumList = classInfo.enumList
-
         fieldMap = classInfo.fieldMap
+
+        nestedClassList = classInfo.nestedClassList
+        methodList = classInfo.methodList
+        enumList = classInfo.enumList
         fieldList = classInfo.fieldList
 
         inheritedMethodMap = classInfo.inheritedMethodMap
+        inheritedEnumMap = classInfo.inheritedEnumMap
+        inheritedFieldMap = classInfo.inheritedFieldMap
+
         inheritedMethodList = classInfo.inheritedMethodList
+        inheritedFieldList = classInfo.inheritedFieldList
+        inheritedFieldList = classInfo.inheritedFieldList
     }
 
 }

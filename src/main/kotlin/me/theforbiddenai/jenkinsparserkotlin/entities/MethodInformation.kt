@@ -12,6 +12,7 @@ data class MethodInformation internal constructor(
     override val name: String
 ) : Information() {
 
+    override lateinit var type: String
     override lateinit var description: String
     override lateinit var rawDescription: String
     override var extraInformation: MutableMap<String, String> = mutableMapOf()
@@ -32,6 +33,7 @@ data class MethodInformation internal constructor(
     private fun retrieveDataFromElement() {
         val descriptionElement = methodElement.selectFirst("div.block")
 
+        type = "Method"
         description = descriptionElement?.text() ?: "N/A"
         rawDescription = descriptionElement?.html() ?: "N/A"
 
@@ -39,6 +41,7 @@ data class MethodInformation internal constructor(
     }
 
     private fun retrieveDataFromCache(methodInfo: MethodInformation) {
+        type = methodInfo.type
         description = methodInfo.description
         rawDescription = methodInfo.rawDescription
         extraInformation = methodInfo.extraInformation

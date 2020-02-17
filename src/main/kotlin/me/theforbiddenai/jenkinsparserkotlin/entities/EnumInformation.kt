@@ -12,6 +12,7 @@ data class EnumInformation internal constructor(
     override val name: String
 ) : Information() {
 
+    override lateinit var type: String
     override lateinit var description: String
     override lateinit var rawDescription: String
     override var extraInformation: MutableMap<String, String> = mutableMapOf()
@@ -32,16 +33,18 @@ data class EnumInformation internal constructor(
     private fun retrieveDataFromElement() {
         val descriptionElement = enumElement.selectFirst("div.block")
 
+        type = "Enum"
         description = descriptionElement?.text() ?: "N/A"
         rawDescription = descriptionElement?.html() ?: "N/A"
 
         retrieveExtraInfo(enumElement)
     }
 
-    private fun retrieveDataFromCache(enu: EnumInformation) {
-        description = enu.description
-        rawDescription = enu.rawDescription
-        extraInformation = enu.extraInformation
-        rawExtraInformation = enu.rawExtraInformation
+    private fun retrieveDataFromCache(enumInfo: EnumInformation) {
+        type = enumInfo.type
+        description = enumInfo.description
+        rawDescription = enumInfo.rawDescription
+        extraInformation = enumInfo.extraInformation
+        rawExtraInformation = enumInfo.rawExtraInformation
     }
 }

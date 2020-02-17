@@ -12,6 +12,7 @@ data class FieldInformation internal constructor(
     override val name: String
 ) : Information() {
 
+    override lateinit var type: String
     override lateinit var description: String
     override lateinit var rawDescription: String
     override var extraInformation: MutableMap<String, String> = mutableMapOf()
@@ -32,6 +33,7 @@ data class FieldInformation internal constructor(
     private fun retrieveDataFromElement() {
         val descriptionElement = fieldElement.selectFirst("div.block")
 
+        type = "Field"
         description = descriptionElement?.text() ?: "N/A"
         rawDescription = descriptionElement?.html() ?: "N/A"
 
@@ -39,6 +41,7 @@ data class FieldInformation internal constructor(
     }
 
     private fun retrieveDataFromCache(fieldInfo: FieldInformation) {
+        type = fieldInfo.type
         description = fieldInfo.description
         rawDescription = fieldInfo.rawDescription
         extraInformation = fieldInfo.extraInformation

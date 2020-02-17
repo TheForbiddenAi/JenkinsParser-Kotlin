@@ -19,6 +19,7 @@ data class ClassInformation internal constructor(
     private val classDocument = Jsoup.connect(url).get()
 
     override lateinit var name: String
+    override lateinit var type: String
     override lateinit var description: String
     override lateinit var rawDescription: String
     override var extraInformation: MutableMap<String, String> = mutableMapOf()
@@ -488,8 +489,11 @@ data class ClassInformation internal constructor(
     }
 
     private fun retrieveDataFromDocument() {
-        name = classDocument.selectFirst("h2").text() ?: "N/A"
-        name = name.replaceBefore(" ", "").trim()
+        val fullName = classDocument.selectFirst("h2")?.text() ?: "N/A"
+        val nameArgs = fullName.split("\\s+".toRegex())
+
+        type = if(nameArgs.size > 1) nameArgs[0] else "Class"
+        name = if(nameArgs.size > 1) nameArgs[1] else nameArgs[0]
 
         val descriptionElement = classDocument.selectFirst("div.description")
             .selectFirst("div.block")
@@ -520,6 +524,7 @@ data class ClassInformation internal constructor(
 
     private fun retrieveDataFromCache(classInfo: ClassInformation) {
         name = classInfo.name
+        type = classInfo.type
         description = classInfo.description
         rawDescription = classInfo.rawDescription
         extraInformation = classInfo.extraInformation

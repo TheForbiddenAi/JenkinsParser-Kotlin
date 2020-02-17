@@ -6,6 +6,7 @@ abstract class Information {
 
     abstract val url: String
     abstract val name: String
+    abstract var type: String
     abstract var description: String
     abstract var rawDescription: String
     abstract var extraInformation: MutableMap<String, String>

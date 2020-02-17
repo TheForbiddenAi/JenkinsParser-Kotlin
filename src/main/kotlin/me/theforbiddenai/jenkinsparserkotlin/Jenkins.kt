@@ -43,7 +43,9 @@ class Jenkins(private var url: String) {
 
 
                 val oldQuery = modifiedQuery
-                modifiedQuery = modifiedQuery.substringAfter(foundClassInfo.name.toLowerCase()).removePrefix(".").trim()
+
+                val className = foundClassInfo.name.substringBefore("<").removePrefix("<").trim().toLowerCase()
+                modifiedQuery = modifiedQuery.substringAfter(className).removePrefix(".").trim()
 
                 if (modifiedQuery.isEmpty()) {
                     foundInformation.add(foundClassInfo)
@@ -52,7 +54,6 @@ class Jenkins(private var url: String) {
                     val potentialClassInfo = oldQuery.substringAfter(classInfo.name.toLowerCase(), "").removePrefix(".")
                         .substringBefore(".", "").trim()
 
-                    println(potentialClassInfo)
                     val foundPotentialClass = classInfo.searchAllNestedClasses(potentialClassInfo)[0]
                     foundInformation.addAll(foundPotentialClass.searchAll(potentialInfo))
                 } else {

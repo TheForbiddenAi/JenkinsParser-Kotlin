@@ -7,6 +7,7 @@ class Jenkins(private var url: String) {
 
     private val classList = mutableListOf<String>()
     private val baseURL: String
+    private val hiddenUnicodeRegex = "\\p{C}".toRegex()
 
     init {
         url = url.removeSuffix("/")
@@ -16,7 +17,10 @@ class Jenkins(private var url: String) {
     }
 
     fun search(query: String): List<Information> {
-        var modifiedQuery = query.replace("#", ".").removeSuffix(".")
+        var modifiedQuery = query.replace("#", ".")
+            .replace(hiddenUnicodeRegex, "")
+            .removeSuffix(".")
+            .toLowerCase()
         val foundInformation = mutableListOf<Information>()
 
         var foundClassList = searchClasses(query)
@@ -36,10 +40,21 @@ class Jenkins(private var url: String) {
 
                 val foundClassInfo =
                     classInfo.locateNestedClass(queryArgs.toTypedArray().copyOfRange(1, queryArgs.size).toList())
-                modifiedQuery = modifiedQuery.substringAfter(foundClassInfo.name).trim().removePrefix(".")
+
+
+                val oldQuery = modifiedQuery
+                modifiedQuery = modifiedQuery.substringAfter(foundClassInfo.name.toLowerCase()).removePrefix(".").trim()
 
                 if (modifiedQuery.isEmpty()) {
                     foundInformation.add(foundClassInfo)
+
+                    val potentialInfo = oldQuery.replaceBeforeLast(".", "").removePrefix(".").trim()
+                    val potentialClassInfo = oldQuery.substringAfter(classInfo.name.toLowerCase(), "").removePrefix(".")
+                        .substringBefore(".", "").trim()
+
+                    println(potentialClassInfo)
+                    val foundPotentialClass = classInfo.searchAllNestedClasses(potentialClassInfo)[0]
+                    foundInformation.addAll(foundPotentialClass.searchAll(potentialInfo))
                 } else {
                     foundInformation.addAll(foundClassInfo.searchAll(modifiedQuery))
                     if (foundInformation.isEmpty()) {

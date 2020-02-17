@@ -427,15 +427,16 @@ data class ClassInformation internal constructor(
             var itemName = signature.replace(hiddenUnicodeRegex, " ")
 
             itemName = if (listId.equals("method.detail", true)) {
-                itemName.replace(annotationRegex, "")
-                    .replace(whitespaceRegex, " ").trim()
+                itemName = itemName.replace(annotationRegex, "").replace(whitespaceRegex, " ")
+                    .substringAfter("public").trim()
 
                 methodNameRegex.find(itemName)?.value
                     ?: throw Exception("Failed to match method signature: $signature")
+
+
             } else {
                 itemName.substringAfterLast(" ")
             }
-
 
             returnMap[itemName] = it
         }

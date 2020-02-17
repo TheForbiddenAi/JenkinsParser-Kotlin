@@ -1,6 +1,6 @@
 # JenkinsParser-Kotlin
 A kotlin api, that supports java, used to easily parse jenkins javadocs
-## Usage
+## Documentation
 
 ### Initialization
 First, you must create an instance of `Jenkins`

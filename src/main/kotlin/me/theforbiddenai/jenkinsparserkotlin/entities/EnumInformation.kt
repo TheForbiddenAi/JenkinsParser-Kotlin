@@ -18,14 +18,14 @@ data class EnumInformation internal constructor(
     override var rawExtraInformation: MutableMap<String, String> = mutableMapOf()
 
     init {
-        val foundInformation = enumCache.getInformation(name)
+        val foundInformation = enumCache.getInformation(url)
 
         if (foundInformation != null) {
             val foundEnum = foundInformation as EnumInformation
             retrieveDataFromCache(foundEnum)
         } else {
             retrieveDataFromElement()
-            enumCache.addInformation(this)
+            enumCache.addInformation(url, this)
         }
     }
 

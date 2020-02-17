@@ -5,7 +5,7 @@ import org.jsoup.Jsoup
 
 class Jenkins(private var url: String) {
 
-    private val classList = mutableMapOf<String, String>()
+    private val classList = mutableListOf<String>()
     private val baseURL: String
 
     init {
@@ -16,10 +16,54 @@ class Jenkins(private var url: String) {
     }
 
     fun search(query: String): List<Information> {
-        TODO("NOT IMPLEMENTED")
-
-        val modifiedQuery = query.replace("#", ".").removeSuffix(".")
+        var modifiedQuery = query.replace("#", ".").removeSuffix(".")
         val foundInformation = mutableListOf<Information>()
+
+        var foundClassList = searchClasses(query)
+        if (foundClassList.isNotEmpty()) {
+            return foundClassList
+        }
+
+
+        val queryArgs = modifiedQuery.split(".")
+        lateinit var classInfo: ClassInformation
+
+        foundClassList = searchClasses(queryArgs[0])
+
+        when (foundClassList.size) {
+            1 -> {
+                classInfo = foundClassList[0]
+
+                val foundClassInfo =
+                    classInfo.locateNestedClass(queryArgs.toTypedArray().copyOfRange(1, queryArgs.size).toList())
+                modifiedQuery = modifiedQuery.substringAfter(foundClassInfo.name).trim().removePrefix(".")
+
+                if (modifiedQuery.isEmpty()) {
+                    foundInformation.add(foundClassInfo)
+                } else {
+                    foundInformation.addAll(foundClassInfo.searchAll(modifiedQuery))
+                    if (foundInformation.isEmpty()) {
+                        throw Exception("Unable to find a method, enum, or field for the query $query")
+                    }
+                }
+            }
+            0 -> {
+                throw Exception("Unable to find a class for the query $query")
+            }
+            else -> {
+                foundClassList.forEach {
+                    val foundClassInfo =
+                        it.locateNestedClass(queryArgs.toTypedArray().copyOfRange(1, queryArgs.size).toList())
+                    val queryWithoutName = modifiedQuery.substringAfter(foundClassInfo.name).trim().removePrefix(".")
+
+                    if (queryWithoutName.isEmpty()) {
+                        foundInformation.add(foundClassInfo)
+                    } else {
+                        foundInformation.addAll(foundClassInfo.searchAll(queryWithoutName))
+                    }
+                }
+            }
+        }
 
         return foundInformation
 
@@ -34,11 +78,12 @@ class Jenkins(private var url: String) {
     fun searchClasses(className: String): List<ClassInformation> {
         val classInfoList: MutableList<ClassInformation> = mutableListOf()
 
-        classList.keys.filter { it.equals(className, true) }
-            .forEach {
-                val classUrl = classList[it] ?: return@forEach
-                classInfoList.add(ClassInformation(this, classUrl, className.toLowerCase()))
-            }
+        classList.filter {
+            val foundClassName = it.substringAfterLast("/").removeSuffix(".html")
+            return@filter foundClassName.equals(className, true)
+        }.forEach {
+            classInfoList.add(ClassInformation(this, it))
+        }
 
         return classInfoList
     }
@@ -51,10 +96,14 @@ class Jenkins(private var url: String) {
      * @throws Exception If the class is not found
      */
     fun retrieveClass(className: String): ClassInformation {
-        val classUrl = classList[className.toLowerCase()]
-            ?: throw Exception("Failed to find a class with the name of $className")
+        classList.filter {
+            val foundClassName = it.substringAfterLast("/").removeSuffix(".html")
+            return@filter foundClassName.equals(className, true)
+        }.forEach {
+           return ClassInformation(this, it)
+        }
 
-        return ClassInformation(this, classUrl, className.toLowerCase())
+        throw Exception("Failed to find a class with the name of $className")
     }
 
     /**
@@ -124,13 +173,11 @@ class Jenkins(private var url: String) {
     private fun initClassList() {
         val classDocument = Jsoup.connect(url).get()
 
-        classDocument.select("li").stream()
-            .filter { it.selectFirst("a") != null }
+        classDocument.select("a").stream()
             .forEach {
-                val className = it.text().toLowerCase()
-                val classUrl = baseURL + it.selectFirst("a").attr("href")
+                val classUrl = baseURL + it.attr("href")
 
-                classList[className] = classUrl
+                classList.add(classUrl)
             }
     }
 

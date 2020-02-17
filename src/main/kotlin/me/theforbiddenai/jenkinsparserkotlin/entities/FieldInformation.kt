@@ -18,14 +18,14 @@ data class FieldInformation internal constructor(
     override var rawExtraInformation: MutableMap<String, String> = mutableMapOf()
 
     init {
-        val foundInformation = fieldCache.getInformation(name)
+        val foundInformation = fieldCache.getInformation(url)
 
         if (foundInformation != null) {
             val foundField = foundInformation as FieldInformation
             retrieveDataFromCache(foundField)
         } else {
             retrieveDataFromElement()
-            fieldCache.addInformation(this)
+            fieldCache.addInformation(url, this)
         }
     }
 

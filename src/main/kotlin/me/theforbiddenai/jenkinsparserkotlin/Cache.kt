@@ -6,17 +6,16 @@ internal class Cache {
 
     private val cacheMap = mutableMapOf<String, Information>()
 
-    fun getInformation(name: String) : Information? {
-        return cacheMap[name.toLowerCase()]
+    fun getInformation(key: String) : Information? {
+        return cacheMap[key.toLowerCase()]
     }
 
-    fun addInformation(info: Information) {
-        val name = info.name.toLowerCase()
-        cacheMap[name] = info
+    fun addInformation(key: String, info: Information) {
+        cacheMap[key] = info
     }
 
-    fun removeInformation(name: String) {
-        cacheMap.remove(name.toLowerCase())
+    fun removeInformation(key: String) {
+        cacheMap.remove(key.toLowerCase())
     }
 
     fun clear() = cacheMap.clear()

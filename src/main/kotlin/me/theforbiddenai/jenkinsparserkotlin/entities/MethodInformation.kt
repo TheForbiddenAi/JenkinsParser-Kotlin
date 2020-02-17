@@ -18,14 +18,14 @@ data class MethodInformation internal constructor(
     override var rawExtraInformation: MutableMap<String, String> = mutableMapOf()
 
     init {
-        val foundInformation = methodCache.getInformation(name)
+        val foundInformation = methodCache.getInformation(url)
 
         if (foundInformation != null) {
             val foundMethod = foundInformation as MethodInformation
             retrieveDataFromCache(foundMethod)
         } else {
             retrieveDataFromElement()
-            methodCache.addInformation(this)
+            methodCache.addInformation(url, this)
         }
     }
 

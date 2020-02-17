@@ -13,11 +13,16 @@ private val whitespaceRegex = "\\s+".toRegex()
 
 data class ClassInformation internal constructor(
     val jenkins: Jenkins,
-    override var url: String,
-    override var name: String
+    override var url: String
 ) : Information() {
 
     private val classDocument = Jsoup.connect(url).get()
+
+    override lateinit var name: String
+    override lateinit var description: String
+    override lateinit var rawDescription: String
+    override var extraInformation: MutableMap<String, String> = mutableMapOf()
+    override var rawExtraInformation: MutableMap<String, String> = mutableMapOf()
 
     private var nestedClassMap: MutableMap<String, String> = mutableMapOf()
     private var methodMap: MutableMap<String, Element> = mutableMapOf()
@@ -39,25 +44,32 @@ data class ClassInformation internal constructor(
     var inheritedEnumList: MutableList<String> = mutableListOf()
     var inheritedFieldList: MutableList<String> = mutableListOf()
 
-    override lateinit var description: String
-    override lateinit var rawDescription: String
-    override var extraInformation: MutableMap<String, String> = mutableMapOf()
-    override var rawExtraInformation: MutableMap<String, String> = mutableMapOf()
-
     init {
-        val foundInformation = classCache.getInformation(name)
+        val foundInformation = classCache.getInformation(url)
 
         if (foundInformation != null) {
             val foundClass = foundInformation as ClassInformation
             retrieveDataFromCache(foundClass)
         } else {
             retrieveDataFromDocument()
-            classCache.addInformation(this)
+            classCache.addInformation(url, this)
         }
     }
 
-    fun searchAll (query: String): List<Information> {
-        TODO("NOT IMPLEMENTED")
+    /**
+     * Searches through ALL methods, enums, and fields looking for a specified query
+     *
+     * @param query The name of the information being looked for
+     * @return Returns a list of all of the found information
+     */
+    fun searchAll(query: String): List<Information> {
+        val foundInformation = mutableListOf<Information>()
+
+        foundInformation.addAll(searchAllMethods(query))
+        foundInformation.addAll(searchAllEnums(query))
+        foundInformation.addAll(searchAllFields(query))
+
+        return foundInformation
     }
 
     /**
@@ -83,13 +95,13 @@ data class ClassInformation internal constructor(
      * @throws Exception If the nested class is not found
      */
     fun retrieveNestedClass(query: String): ClassInformation {
-        nestedClassMap.filter { (className, _) ->
-            val modifiedClassName = className.replace("$name.", "").trim()
-            val modifiedQuery = query.replace("$name.", "").trim()
+        if (nestedClassList.containsIgnoreCase(query)) {
+            nestedClassMap.filter { (className, _) ->
+                val modifiedQuery = query.replace("$name.", "").trim()
+                className.equals(modifiedQuery, true)
+            }.forEach { (_, classUrl) -> return ClassInformation(jenkins, classUrl) }
 
-            modifiedClassName.equals(modifiedQuery, true)
-        }.forEach { (className, classUrl) -> return ClassInformation(jenkins, classUrl, className) }
-
+        }
         throw Exception("Could not find a nested class with the name $query in $name")
     }
 
@@ -101,8 +113,10 @@ data class ClassInformation internal constructor(
      * @throws Exception If the inherited nested class is not found
      */
     fun retrieveInheritedNestedClass(query: String): ClassInformation {
-        val foundNestedClasses: List<ClassInformation> = retrieveInheritedData(inheritedNestedClassMap, query)
-        if (foundNestedClasses.isNotEmpty()) return foundNestedClasses[0]
+        if (inheritedNestedClassList.containsIgnoreCase(query)) {
+            val foundNestedClasses: List<ClassInformation> = retrieveInheritedData(inheritedNestedClassMap, query)
+            if (foundNestedClasses.isNotEmpty()) return foundNestedClasses[0]
+        }
 
         throw Exception("Could not find an inherited nested class/interface with the name of $query in the class $name")
     }
@@ -132,7 +146,6 @@ data class ClassInformation internal constructor(
         val foundMethodList = mutableListOf<MethodInformation>()
 
         retrieveData(methodMap, query).forEach { (methodName, methodUrl) ->
-
             val fieldElement = methodMap[methodName] ?: return@forEach
             foundMethodList.add(MethodInformation(this, fieldElement, methodUrl, methodName))
         }
@@ -173,9 +186,11 @@ data class ClassInformation internal constructor(
      * @throws Exception If the enum is not found
      */
     fun retrieveEnum(query: String): EnumInformation {
-        retrieveData(enumMap, query).forEach { (enumName, enumUrl) ->
-            val fieldElement = enumMap[enumName] ?: return@forEach
-            return EnumInformation(this, fieldElement, enumUrl, enumName)
+        if (enumList.containsIgnoreCase(query)) {
+            retrieveData(enumMap, query).forEach { (enumName, enumUrl) ->
+                val fieldElement = enumMap[enumName] ?: return@forEach
+                return EnumInformation(this, fieldElement, enumUrl, enumName)
+            }
         }
 
         throw Exception("Could not find an enum with the name of $query in the class $name")
@@ -189,8 +204,10 @@ data class ClassInformation internal constructor(
      * @throws Exception If the inherited enum is not found
      */
     fun retrieveInheritedEnum(query: String): EnumInformation {
-        val foundEnums: List<EnumInformation> = retrieveInheritedData(inheritedEnumMap, query)
-        if (foundEnums.isNotEmpty()) return foundEnums[0]
+        if (inheritedEnumList.containsIgnoreCase(query)) {
+            val foundEnums: List<EnumInformation> = retrieveInheritedData(inheritedEnumMap, query)
+            if (foundEnums.isNotEmpty()) return foundEnums[0]
+        }
 
         throw Exception("Could not find an inherited enum with the name of $query in the class $name")
     }
@@ -218,11 +235,12 @@ data class ClassInformation internal constructor(
      * @throws Exception If the field is not found
      */
     fun retrieveField(query: String): FieldInformation {
-        retrieveData(fieldMap, query).forEach { (fieldName, fieldUrl) ->
-            val fieldElement = fieldMap[fieldName] ?: return@forEach
-            return FieldInformation(this, fieldElement, fieldUrl, fieldName)
+        if (fieldList.containsIgnoreCase(query)) {
+            retrieveData(fieldMap, query).forEach { (fieldName, fieldUrl) ->
+                val fieldElement = fieldMap[fieldName] ?: return@forEach
+                return FieldInformation(this, fieldElement, fieldUrl, fieldName)
+            }
         }
-
         throw Exception("Could not find a field with the name of $query in the class $name")
     }
 
@@ -234,8 +252,10 @@ data class ClassInformation internal constructor(
      * @throws Exception If the inherited field is not found
      */
     fun retrieveInheritedField(query: String): FieldInformation {
-        val foundFields: List<FieldInformation> = retrieveInheritedData(inheritedFieldMap, query)
-        if (foundFields.isNotEmpty()) return foundFields[0]
+        if (inheritedFieldList.containsIgnoreCase(query)) {
+            val foundFields: List<FieldInformation> = retrieveInheritedData(inheritedFieldMap, query)
+            if (foundFields.isNotEmpty()) return foundFields[0]
+        }
 
         throw Exception("Could not find an inherited field with the name of $query in the class $name")
     }
@@ -294,7 +314,6 @@ data class ClassInformation internal constructor(
                 }
             }
 
-
         return foundInfoMap as List<T>
     }
 
@@ -334,7 +353,7 @@ data class ClassInformation internal constructor(
         tableBody.select("th.colSecond")
             .filter { it.attr("scope").equals("row", true) }
             .forEach {
-                val itemName = it.text()
+                val itemName = it.text().substringAfter("$name.")
                 val anchorHref = it.selectFirst("a").attr("href")
 
                 val itemUrl = "${url.substringBeforeLast("/")}/$anchorHref"
@@ -422,6 +441,49 @@ data class ClassInformation internal constructor(
         }
 
         return returnMap
+    }
+
+    /**
+     * Goes to the deepest (inherited) nested class
+     *
+     * @param queryArgs The list of arguments potentially containing (inherited) nested class name
+     * @return The found class information
+     */
+    internal fun locateNestedClass(queryArgs: List<String>): ClassInformation {
+        var classInfo = this
+
+        for (arg in queryArgs) {
+            if (checkForNestedClass(classInfo, arg) != classInfo) {
+                classInfo = checkForNestedClass(classInfo, arg)
+            } else break
+        }
+
+        if (classInfo == this) {
+            val fullQuery = queryArgs.joinToString(separator = ".")
+
+            if (checkForNestedClass(classInfo, fullQuery) != classInfo) return checkForNestedClass(classInfo, fullQuery)
+
+            val partialQuery = fullQuery.substringBeforeLast(".")
+            return checkForNestedClass(classInfo, partialQuery)
+        }
+        return classInfo
+    }
+
+    /**
+     * Checks if there is a nested class by a specified name and if so returns that class
+     *
+     * @param classInfo The class the nested class is coming from
+     * @param query The potential nested class's name
+     * @return The found class information or the given class information if none is found
+     */
+    private fun checkForNestedClass(classInfo: ClassInformation, query: String): ClassInformation {
+        val nestedClassList = classInfo.nestedClassList
+        val inheritedNestedClassList = classInfo.inheritedNestedClassList
+
+        if (nestedClassList.containsIgnoreCase(query) || inheritedNestedClassList.containsIgnoreCase(query)) {
+            return classInfo.searchAllNestedClasses(query)[0]
+        }
+        return classInfo
     }
 
     private fun retrieveDataFromDocument() {

@@ -6,7 +6,7 @@ import org.jsoup.Jsoup
 class Jenkins(private var url: String) {
 
     private val classList = mutableListOf<String>()
-    private val baseURL: String
+    internal val baseURL: String
     private val hiddenUnicodeRegex = "\\p{C}".toRegex()
 
     init {
@@ -53,6 +53,7 @@ class Jenkins(private var url: String) {
                     val potentialInfo = oldQuery.replaceBeforeLast(".", "").removePrefix(".").trim()
                     val potentialClassInfo = oldQuery.substringAfter(classInfo.name.toLowerCase(), "").removePrefix(".")
                         .substringBefore(".", "").trim()
+
 
                     val foundPotentialClass = classInfo.searchAllNestedClasses(potentialClassInfo)[0]
                     foundInformation.addAll(foundPotentialClass.searchAll(potentialInfo))
@@ -108,18 +109,23 @@ class Jenkins(private var url: String) {
      * Retrieves the first class with the given name
      *
      * @param className The name of the class being searched for
+     * @param limitedView Whether or not to retrieve the limited class view
      * @return The found class object
      * @throws Exception If the class is not found
      */
-    fun retrieveClass(className: String): ClassInformation {
+    internal fun retrieveClass(className: String, limitedView: Boolean): ClassInformation {
         classList.filter {
             val foundClassName = it.substringAfterLast("/").removeSuffix(".html")
             return@filter foundClassName.equals(className, true)
         }.forEach {
-           return ClassInformation(this, it)
+            return ClassInformation(this, it, limitedView)
         }
 
         throw Exception("Failed to find a class with the name of $className")
+    }
+
+    fun retrieveClass(className: String): ClassInformation {
+        return retrieveClass(className, false)
     }
 
     /**

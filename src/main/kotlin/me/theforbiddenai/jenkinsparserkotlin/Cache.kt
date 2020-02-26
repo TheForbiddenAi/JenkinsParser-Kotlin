@@ -7,7 +7,7 @@ internal class Cache {
     private val cacheMap = mutableMapOf<String, Information>()
 
     fun getInformation(key: String) : Information? {
-        return cacheMap[key.toLowerCase()]
+        return cacheMap[key]
     }
 
     fun addInformation(key: String, info: Information) {
@@ -15,7 +15,11 @@ internal class Cache {
     }
 
     fun removeInformation(key: String) {
-        cacheMap.remove(key.toLowerCase())
+        cacheMap.remove(key)
+    }
+
+    fun containsInformation(key: String) : Boolean{
+        return cacheMap.containsKey(key)
     }
 
     fun clear() = cacheMap.clear()

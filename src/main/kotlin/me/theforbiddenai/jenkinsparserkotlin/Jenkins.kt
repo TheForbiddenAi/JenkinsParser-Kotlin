@@ -50,13 +50,17 @@ class Jenkins(private var url: String) {
                 if (modifiedQuery.isEmpty()) {
                     foundInformation.add(foundClassInfo)
 
-                    val potentialInfo = oldQuery.replaceBeforeLast(".", "").removePrefix(".").trim()
-                    val potentialClassInfo = oldQuery.substringAfter(classInfo.name.toLowerCase(), "").removePrefix(".")
-                        .substringBefore(".", "").trim()
+                    try {
+                        val potentialInfo = oldQuery.replaceBeforeLast(".", "").removePrefix(".").trim()
+                        val potentialClassInfo =
+                            oldQuery.substringAfter(classInfo.name.toLowerCase(), "").removePrefix(".")
+                                .substringBefore(".", "").trim()
 
+                        val foundPotentialClass = classInfo.searchAllNestedClasses(potentialClassInfo)[0]
+                        foundInformation.addAll(foundPotentialClass.searchAll(potentialInfo))
+                    } catch (ignored: Exception) {
 
-                    val foundPotentialClass = classInfo.searchAllNestedClasses(potentialClassInfo)[0]
-                    foundInformation.addAll(foundPotentialClass.searchAll(potentialInfo))
+                    }
                 } else {
                     foundInformation.addAll(foundClassInfo.searchAll(modifiedQuery))
                     if (foundInformation.isEmpty()) {

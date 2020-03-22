@@ -197,14 +197,26 @@ class Jenkins(private var url: String) {
      * Pulls the names and urls of all the classes from the class list java doc page and adds them to a map
      */
     private fun initClassList() {
-        val classDocument = Jsoup.connect(url).get()
+        val classDocument = Jsoup.connect(url).maxBodySize(0).get()
 
-        classDocument.select("a").stream()
+        val elementToSearch = if (url.contains("allclasses")) "a" else "li.circle"
+
+        classDocument.select(elementToSearch).stream()
             .forEach {
-                val classUrl = baseURL + it.attr("href")
+
+                var href = if (it.hasAttr("href")) {
+                    it.attr("href")
+                } else {
+                    it.selectFirst("a").attr("href")
+                }
+                href = href.replace("../", "").trim()
+
+                val classUrl = baseURL + href
 
                 classList.add(classUrl)
             }
+
+
     }
 
 }

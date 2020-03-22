@@ -2,13 +2,39 @@
 A kotlin api, that supports java, used to easily parse jenkins javadocs
 ## Documentation
 
+### Maven Dependency
+
+<a href="https://github.com/TheForbiddenAi/JenkinsParser-Kotlin">
+    <img src="https://img.shields.io/github/v/release/TheForbiddenAi/JenkinsParser-Kotlin?label=Latest%20Version" alt="Latest Version">
+</a>
+
+<br>
+
+Make sure to replace **VERSION** with the version shown above
+
+```xml
+<repository>
+    <id>jitpack.io</id>
+    <url>https://jitpack.io</url>
+</repository>
+```
+```xml
+<dependency>
+    <groupId>com.github.TheForbiddenAi</groupId>
+    <artifactId>JenkinsParser-Kotlin</artifactId>
+    <version>VERSION</version>
+</dependency>
+```
+
+
 ### Initialization
 First, you must create an instance of `Jenkins`
 ```kotlin
 val jenkins = Jenkins(url)
 ```
 
-* url - The jenkins class list url (Example URL: https://docs.oracle.com/en/java/javase/11/docs/api/allclasses.html)
+* url - The jenkins class list url or tree url 
+(Example URLs: https://docs.oracle.com/en/java/javase/11/docs/api/allclasses.html or https://docs.oracle.com/en/java/javase/13/docs/api/overview-tree.html)
 
 ### Usage
 

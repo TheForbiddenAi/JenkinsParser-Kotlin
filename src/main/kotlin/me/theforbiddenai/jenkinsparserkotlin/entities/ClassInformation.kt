@@ -108,10 +108,9 @@ data class ClassInformation internal constructor(
      */
     private fun retrieveNestedClass(query: String, limitedView: Boolean): ClassInformation {
         if (nestedClassList.containsIgnoreCase(query)) {
-            nestedClassMap.filter { (className, _) ->
-                val modifiedQuery = query.replace("$name.", "").trim()
-                className.equals(modifiedQuery, true)
-            }.forEach { (_, classUrl) -> return ClassInformation(jenkins, classUrl, limitedView) }
+            val modifiedQuery = query.replace("$name.", "").trim()
+            nestedClassMap.filter { (className, _) -> className.equals(modifiedQuery, true)}
+                .forEach { (_, classUrl) -> return ClassInformation(jenkins, classUrl, limitedView) }
 
         }
         throw Exception("Could not find a nested class with the name $query in $name")
@@ -372,10 +371,11 @@ data class ClassInformation internal constructor(
 
         val blockList = anchor.parent()
 
-        val tableBody = blockList.selectFirst("tbody") ?: return foundDataMap
+        val tableRows = blockList.select("tr") ?: return foundDataMap
 
-        tableBody.select("th.colSecond")
-            .filter { it.attr("scope").equals("row", true) }
+        tableRows.select(".colSecond")
+            .filter {
+                it.attr("scope").equals("row", true) }
             .forEach {
                 val itemName = it.text().substringAfter("$name.")
                 val anchorHref = it.selectFirst("a").attr("href")
@@ -384,6 +384,8 @@ data class ClassInformation internal constructor(
 
                 foundDataMap[itemName] = itemUrl
             }
+
+
 
         return foundDataMap
     }
@@ -401,6 +403,8 @@ data class ClassInformation internal constructor(
             ?: classDocument.selectFirst("a[name=$tableId]")
             ?: return foundDataMap
 
+
+
         val blockList = anchor.parent()
 
         val inheritedAnchorList = blockList.select("a").filter {
@@ -409,24 +413,25 @@ data class ClassInformation internal constructor(
         }
 
         inheritedAnchorList.forEach { foundAnchor ->
-            val inheritedBlockList = foundAnchor.parent().selectFirst("li.blocklist")
+            val parentElement = foundAnchor.parent();
 
-            val headerAnchorElement = inheritedBlockList.selectFirst("h3").selectFirst("a")
+            val inheritedList = parentElement.selectFirst("li.blocklist") ?: parentElement.selectFirst("div.inheritedList")
+
+            val headerElement = inheritedList.selectFirst("h3") ?: inheritedList.selectFirst("h2")
+            val headerAnchorElement = headerElement.selectFirst("a")
+
             val href = headerAnchorElement.attr("href")
-
             val newUrl = getUrl(href)
 
             if(tableId.equals("nested.class.summary", true)) {
                 val className = headerAnchorElement.text()
                 foundDataMap[className] = newUrl
             } else {
-                val itemList = inheritedBlockList.selectFirst("code").select("a")
+                val itemList = inheritedList.selectFirst("code").select("a")
                 itemList.forEach {
                     foundDataMap[it.text()] = newUrl
                 }
             }
-
-
 
         }
 
@@ -459,21 +464,22 @@ data class ClassInformation internal constructor(
 
         blockList.select("li.blockList").forEach {
 
-            val signature = it.selectFirst("pre").text()
 
-            var itemName = signature.replace(hiddenUnicodeRegex, " ")
+            val itemName = when(listId.toLowerCase()) {
+                "method.detail" -> {
+                    val signature = it.selectFirst(".memberSignature")?.text() ?: it.selectFirst("pre").text()
 
-            itemName = if (listId.equals("method.detail", true)) {
-                itemName = itemName.replace(annotationRegex, "").replace(whitespaceRegex, " ")
-                    .substringAfter("public").trim()
+                    var modifiedSignature = signature.replace(hiddenUnicodeRegex, " ")
+                    modifiedSignature = modifiedSignature.replace(annotationRegex, "").replace(whitespaceRegex, " ")
+                        .substringAfter("public").trim()
 
-                methodNameRegex.find(itemName)?.value
-                    ?: throw Exception("Failed to match method signature: $signature")
+                    methodNameRegex.find(modifiedSignature)?.value
+                        ?: throw Exception("Failed to match method signature: $signature")
+                }
 
-
-            } else {
-                itemName.substringAfterLast(" ")
+                else -> it.selectFirst("h4")?.text() ?: it.selectFirst("h3").text()
             }
+
 
             returnMap[itemName] = it
         }
@@ -527,7 +533,7 @@ data class ClassInformation internal constructor(
     }
 
     private fun retrieveLimitedView() {
-        val fullName = classDocument.selectFirst("h2")?.text() ?: "N/A"
+        val fullName = classDocument.selectFirst(".title")?.text() ?: "N/A"
         val nameArgs = fullName.split("\\s+".toRegex())
 
         type = if(nameArgs.size > 1) nameArgs[0] else "Class"
@@ -541,14 +547,14 @@ data class ClassInformation internal constructor(
     }
 
     private fun retrieveDataFromDocument() {
-        val fullName = classDocument.selectFirst("h2")?.text() ?: "N/A"
+        val fullName = classDocument.selectFirst(".title")?.text() ?: "N/A"
         val nameArgs = fullName.split("\\s+".toRegex())
 
         type = if(nameArgs.size > 1) nameArgs[0] else "Class"
         name = if(nameArgs.size > 1) nameArgs[1] else nameArgs[0]
 
-        val descriptionElement = classDocument.selectFirst("div.description")
-            .selectFirst("div.block")
+        val descriptionElement = classDocument.selectFirst(".description")
+            .selectFirst(".block")
 
         description = descriptionElement?.text() ?: "N/A"
         rawDescription = descriptionElement?.html() ?: "N/A"

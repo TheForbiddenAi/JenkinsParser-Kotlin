@@ -213,7 +213,7 @@ class Jenkins(private var url: String) {
 
                 val classUrl = baseURL + href
 
-                classList.add(classUrl)
+                if(!classList.contains(classUrl)) classList.add(classUrl)
             }
 
 

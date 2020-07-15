@@ -295,7 +295,14 @@ data class ClassInformation internal constructor(
             return@filter modifiedName.equals(query, true)
         }
             .forEach { (infoName, infoElement) ->
-                val anchorElement = infoElement.parent().previousElementSibling() ?: return@forEach
+
+                // This allows for backwards compatibility with old jenkins versions
+                var anchorElement = infoElement.parent().previousElementSibling() ?: return@forEach
+                val tagName = anchorElement.tagName() ?: ""
+
+                if(tagName.contentEquals("h2")) {
+                   anchorElement = infoElement.selectFirst("a")
+                }
 
                 val anchorAttr = if (anchorElement.hasAttr("id")) {
                     anchorElement.attr("id")

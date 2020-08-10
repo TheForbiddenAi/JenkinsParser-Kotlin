@@ -1,7 +1,5 @@
 package me.theforbiddenai.jenkinsparserkotlin
 
-import kotlinx.coroutines.async
-import kotlinx.coroutines.runBlocking
 import me.theforbiddenai.jenkinsparserkotlin.entities.*
 import org.jsoup.Jsoup
 
@@ -214,12 +212,12 @@ class Jenkins(private var url: String) {
     /**
      * Pulls the names and urls of all the classes from the class list java doc page and adds them to a map
      */
-    private fun retrieveClassList(): MutableList<String> = runBlocking {
+    private fun retrieveClassList(): MutableList<String> {
         val urlList = mutableListOf<String>()
 
-        val deferredDoc = async { Jsoup.connect(url).maxBodySize(0).ignoreHttpErrors(true) }
+        val classDocument = Jsoup.connect(url).maxBodySize(0).ignoreHttpErrors(true).get()
         val elementToSearch = if (url.contains("allclasses")) "a" else "li.circle"
-        val classDocument = deferredDoc.await().get()
+
 
         classDocument.select(elementToSearch).stream()
             .forEach {
@@ -236,7 +234,7 @@ class Jenkins(private var url: String) {
                 if (!urlList.contains(classUrl)) urlList.add(classUrl)
             }
 
-        return@runBlocking urlList
+        return urlList
     }
 
 }

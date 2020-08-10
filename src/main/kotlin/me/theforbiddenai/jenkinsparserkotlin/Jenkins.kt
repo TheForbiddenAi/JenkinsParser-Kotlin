@@ -5,7 +5,7 @@ import org.jsoup.Jsoup
 
 class Jenkins(private var url: String) {
 
-    private val classList: MutableList<String> by lazy { retrieveClassList() }
+    val classList: MutableList<String> by lazy { retrieveClassList() }
     internal val baseURL: String by lazy {
         url.substring(0, url.lastIndexOf("/") + 1)
     }

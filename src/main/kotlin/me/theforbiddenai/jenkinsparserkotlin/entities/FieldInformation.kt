@@ -1,9 +1,6 @@
 package me.theforbiddenai.jenkinsparserkotlin.entities
 
-import me.theforbiddenai.jenkinsparserkotlin.Cache
 import org.jsoup.nodes.Element
-
-private val fieldCache = Cache()
 
 data class FieldInformation internal constructor(
     val classInfo: ClassInformation,
@@ -19,18 +16,6 @@ data class FieldInformation internal constructor(
     override var rawExtraInformation: MutableMap<String, String> = mutableMapOf()
 
     init {
-        val foundInformation = fieldCache.getInformation(url)
-
-        if (foundInformation != null) {
-            val foundField = foundInformation as FieldInformation
-            retrieveDataFromCache(foundField)
-        } else {
-            retrieveDataFromElement()
-            fieldCache.addInformation(url, this)
-        }
-    }
-
-    private fun retrieveDataFromElement() {
         val descriptionElement = fieldElement.selectFirst("div.block")
 
         type = "Field"
@@ -40,11 +25,4 @@ data class FieldInformation internal constructor(
         retrieveExtraInfo(fieldElement)
     }
 
-    private fun retrieveDataFromCache(fieldInfo: FieldInformation) {
-        type = fieldInfo.type
-        description = fieldInfo.description
-        rawDescription = fieldInfo.rawDescription
-        extraInformation = fieldInfo.extraInformation
-        rawExtraInformation = fieldInfo.rawExtraInformation
-    }
 }

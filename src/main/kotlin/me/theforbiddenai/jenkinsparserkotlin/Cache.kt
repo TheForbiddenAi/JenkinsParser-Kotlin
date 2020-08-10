@@ -2,24 +2,25 @@ package me.theforbiddenai.jenkinsparserkotlin
 
 import me.theforbiddenai.jenkinsparserkotlin.entities.Information
 
-internal class Cache {
+internal class Cache<T : Information> {
 
-    private val cacheMap = mutableMapOf<String, Information>()
+    private val cacheMap = mutableMapOf<String, T>()
 
-    fun getInformation(key: String) : Information? {
-        return cacheMap[key]
+    fun retrieveInformation(url: String) : T? {
+        return cacheMap[url.toLowerCase()]
     }
 
-    fun addInformation(key: String, info: Information) {
-        cacheMap[key] = info
+    fun addInformation(url: String, info: T) {
+        if(containsUrl(url)) return
+        cacheMap[url.toLowerCase()] = info
     }
 
-    fun removeInformation(key: String) {
-        cacheMap.remove(key)
+    fun removeInformation(url: String) {
+        cacheMap.remove(url.toLowerCase())
     }
 
-    fun containsInformation(key: String) : Boolean{
-        return cacheMap.containsKey(key)
+    fun containsUrl(url: String) : Boolean{
+        return cacheMap.containsKey(url.toLowerCase())
     }
 
     fun clear() = cacheMap.clear()

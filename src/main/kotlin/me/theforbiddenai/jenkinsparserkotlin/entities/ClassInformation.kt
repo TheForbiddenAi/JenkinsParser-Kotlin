@@ -5,7 +5,6 @@ import me.theforbiddenai.jenkinsparserkotlin.Jenkins
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
-private val classCache = Cache()
 private val hiddenUnicodeRegex = "\\p{C}".toRegex()
 private val annotationRegex = "[@]\\w+\\s+".toRegex()
 private val methodNameRegex = "\\w+\\s?\\(.*\\)".toRegex()
@@ -18,6 +17,10 @@ data class ClassInformation internal constructor(
 ) : Information() {
 
     private val classDocument = Jsoup.connect(url).get()
+
+    private val methodCache = Cache<MethodInformation>()
+    private val enumCache = Cache<EnumInformation>()
+    private val fieldCache = Cache<FieldInformation>()
 
     override lateinit var name: String
     override lateinit var type: String
@@ -47,19 +50,12 @@ data class ClassInformation internal constructor(
     var inheritedFieldList: MutableList<String> = mutableListOf()
 
     init {
-        val foundInformation = classCache.getInformation(url)
-
-        if (foundInformation != null) {
-            val foundClass = foundInformation as ClassInformation
-            retrieveDataFromCache(foundClass)
+        if (limitedView) {
+            retrieveLimitedView()
         } else {
-            // Classes are added to cache in the retrieveDataFromDocument method
-            if(limitedView) {
-                retrieveLimitedView()
-            } else {
-                retrieveDataFromDocument()
-            }
+            retrieveDataFromDocument()
         }
+
     }
 
     /**
@@ -109,8 +105,10 @@ data class ClassInformation internal constructor(
     private fun retrieveNestedClass(query: String, limitedView: Boolean): ClassInformation {
         if (nestedClassList.containsIgnoreCase(query)) {
             val modifiedQuery = query.replace("$name.", "").trim()
-            nestedClassMap.filter { (className, _) -> className.equals(modifiedQuery, true)}
-                .forEach { (_, classUrl) -> return ClassInformation(jenkins, classUrl, limitedView) }
+            nestedClassMap.filter { (className, _) -> className.equals(modifiedQuery, true) }
+                .forEach { (_, classUrl) ->
+                    return jenkins.retrieveClassByUrl(classUrl, limitedView)
+                }
 
         }
         throw Exception("Could not find a nested class with the name $query in $name")
@@ -130,7 +128,8 @@ data class ClassInformation internal constructor(
      */
     private fun retrieveInheritedNestedClass(query: String, limitedView: Boolean): ClassInformation {
         if (inheritedNestedClassList.containsIgnoreCase(query)) {
-            val foundNestedClasses: List<ClassInformation> = retrieveInheritedData(inheritedNestedClassMap, query, limitedView)
+            val foundNestedClasses: List<ClassInformation> =
+                retrieveInheritedData(inheritedNestedClassMap, query, limitedView)
             if (foundNestedClasses.isNotEmpty()) return foundNestedClasses[0]
         }
 
@@ -167,7 +166,14 @@ data class ClassInformation internal constructor(
 
         retrieveData(methodMap, query).forEach { (methodName, methodUrl) ->
             val fieldElement = methodMap[methodName] ?: return@forEach
-            foundMethodList.add(MethodInformation(this, fieldElement, methodUrl, methodName))
+
+            val methodInfo = if (methodCache.containsUrl(methodUrl)) {
+                methodCache.retrieveInformation(methodUrl)!!
+            } else {
+                MethodInformation(this, fieldElement, methodUrl, methodName)
+            }
+            methodCache.addInformation(methodUrl, methodInfo)
+            foundMethodList.add(methodInfo)
         }
 
         return foundMethodList
@@ -209,7 +215,16 @@ data class ClassInformation internal constructor(
         if (enumList.containsIgnoreCase(query)) {
             retrieveData(enumMap, query).forEach { (enumName, enumUrl) ->
                 val fieldElement = enumMap[enumName] ?: return@forEach
-                return EnumInformation(this, fieldElement, enumUrl, enumName)
+
+                return if (enumCache.containsUrl(enumUrl)) {
+                    enumCache.retrieveInformation(enumUrl)!!
+                } else {
+                    val enumInfo = EnumInformation(this, fieldElement, enumUrl, enumName)
+                    enumCache.addInformation(enumUrl, enumInfo)
+
+                    enumInfo
+                }
+
             }
         }
 
@@ -258,7 +273,17 @@ data class ClassInformation internal constructor(
         if (fieldList.containsIgnoreCase(query)) {
             retrieveData(fieldMap, query).forEach { (fieldName, fieldUrl) ->
                 val fieldElement = fieldMap[fieldName] ?: return@forEach
-                return FieldInformation(this, fieldElement, fieldUrl, fieldName)
+
+                return if (fieldCache.containsUrl(fieldUrl)) {
+                    fieldCache.retrieveInformation(fieldUrl)!!
+                } else {
+                    val fieldInfo = FieldInformation(this, fieldElement, fieldUrl, fieldName)
+                    fieldCache.addInformation(fieldUrl, fieldInfo)
+
+                    fieldInfo
+                }
+
+
             }
         }
         throw Exception("Could not find a field with the name of $query in the class $name")
@@ -300,8 +325,8 @@ data class ClassInformation internal constructor(
                 var anchorElement = infoElement.parent().previousElementSibling() ?: return@forEach
                 val tagName = anchorElement.tagName() ?: ""
 
-                if(tagName.contentEquals("h2")) {
-                   anchorElement = infoElement.selectFirst("a")
+                if (tagName.contentEquals("h2")) {
+                    anchorElement = infoElement.selectFirst("a")
                 }
 
                 val anchorAttr = if (anchorElement.hasAttr("id")) {
@@ -333,7 +358,7 @@ data class ClassInformation internal constructor(
 
         inheritedMap.filter { (infoName, _) -> infoName.equals(query, true) }
             .forEach { (infoName, classUrl) ->
-                val classInformation = ClassInformation(jenkins, classUrl, limitedView)
+                val classInformation = jenkins.retrieveClassByUrl(classUrl, limitedClassView)
 
                 when (inheritedMap) {
                     inheritedNestedClassMap -> foundInfoMap.add(classInformation)
@@ -382,7 +407,8 @@ data class ClassInformation internal constructor(
 
         tableRows.select(".colSecond")
             .filter {
-                it.attr("scope").equals("row", true) }
+                it.attr("scope").equals("row", true)
+            }
             .forEach {
                 val itemName = it.text().substringAfter("$name.")
                 val anchorHref = it.selectFirst("a").attr("href")
@@ -411,7 +437,6 @@ data class ClassInformation internal constructor(
             ?: return foundDataMap
 
 
-
         val blockList = anchor.parent()
 
         val inheritedAnchorList = blockList.select("a").filter {
@@ -422,7 +447,8 @@ data class ClassInformation internal constructor(
         inheritedAnchorList.forEach { foundAnchor ->
             val parentElement = foundAnchor.parent();
 
-            val inheritedList = parentElement.selectFirst("li.blocklist") ?: parentElement.selectFirst("div.inheritedList")
+            val inheritedList =
+                parentElement.selectFirst("li.blocklist") ?: parentElement.selectFirst("div.inheritedList")
 
             val headerElement = inheritedList.selectFirst("h3") ?: inheritedList.selectFirst("h2")
             val headerAnchorElement = headerElement.selectFirst("a")
@@ -430,7 +456,7 @@ data class ClassInformation internal constructor(
             val href = headerAnchorElement.attr("href")
             val newUrl = getUrl(href)
 
-            if(tableId.equals("nested.class.summary", true)) {
+            if (tableId.equals("nested.class.summary", true)) {
                 val className = headerAnchorElement.text()
                 foundDataMap[className] = newUrl
             } else {
@@ -445,7 +471,7 @@ data class ClassInformation internal constructor(
         return foundDataMap
     }
 
-    private fun getUrl(href: String) : String {
+    private fun getUrl(href: String): String {
         return if (href.contains("../")) {
             jenkins.baseURL + href.replace("^[^A-Za-z]+".toRegex(), "")
         } else {
@@ -472,7 +498,7 @@ data class ClassInformation internal constructor(
         blockList.select("li.blockList").forEach {
 
 
-            val itemName = when(listId.toLowerCase()) {
+            val itemName = when (listId.toLowerCase()) {
                 "method.detail" -> {
                     val signature = it.selectFirst(".memberSignature")?.text() ?: it.selectFirst("pre").text()
 
@@ -543,8 +569,8 @@ data class ClassInformation internal constructor(
         val fullName = classDocument.selectFirst(".title")?.text() ?: "N/A"
         val nameArgs = fullName.split("\\s+".toRegex())
 
-        type = if(nameArgs.size > 1) nameArgs[0] else "Class"
-        name = if(nameArgs.size > 1) nameArgs[1] else nameArgs[0]
+        type = if (nameArgs.size > 1) nameArgs[0] else "Class"
+        name = if (nameArgs.size > 1) nameArgs[1] else nameArgs[0]
 
         nestedClassMap = retrieveLinkDataFromTable("nested.class.summary")
         nestedClassList = nestedClassMap.keys.toMutableList()
@@ -557,8 +583,8 @@ data class ClassInformation internal constructor(
         val fullName = classDocument.selectFirst(".title")?.text() ?: "N/A"
         val nameArgs = fullName.split("\\s+".toRegex())
 
-        type = if(nameArgs.size > 1) nameArgs[0] else "Class"
-        name = if(nameArgs.size > 1) nameArgs[1] else nameArgs[0]
+        type = if (nameArgs.size > 1) nameArgs[0] else "Class"
+        name = if (nameArgs.size > 1) nameArgs[1] else nameArgs[0]
 
         val descriptionElement = classDocument.selectFirst(".description")
             .selectFirst(".block")
@@ -585,37 +611,6 @@ data class ClassInformation internal constructor(
         inheritedMethodList = inheritedMethodMap.keys.toMutableList()
         inheritedEnumList = inheritedEnumMap.keys.toMutableList()
         inheritedFieldList = inheritedFieldMap.keys.toMutableList()
-
-        classCache.addInformation(url, this)
-    }
-
-    private fun retrieveDataFromCache(classInfo: ClassInformation) {
-        name = classInfo.name
-        type = classInfo.type
-        description = classInfo.description
-        rawDescription = classInfo.rawDescription
-        extraInformation = classInfo.extraInformation
-        rawExtraInformation = classInfo.rawExtraInformation
-
-        nestedClassMap = classInfo.nestedClassMap
-        methodMap = classInfo.methodMap
-        enumMap = classInfo.enumMap
-        fieldMap = classInfo.fieldMap
-
-        nestedClassList = classInfo.nestedClassList
-        methodList = classInfo.methodList
-        enumList = classInfo.enumList
-        fieldList = classInfo.fieldList
-
-        inheritedNestedClassMap = classInfo.inheritedNestedClassMap
-        inheritedMethodMap = classInfo.inheritedMethodMap
-        inheritedEnumMap = classInfo.inheritedEnumMap
-        inheritedFieldMap = classInfo.inheritedFieldMap
-
-        inheritedNestedClassList = classInfo.inheritedNestedClassList
-        inheritedMethodList = classInfo.inheritedMethodList
-        inheritedFieldList = classInfo.inheritedFieldList
-        inheritedFieldList = classInfo.inheritedFieldList
     }
 
 }

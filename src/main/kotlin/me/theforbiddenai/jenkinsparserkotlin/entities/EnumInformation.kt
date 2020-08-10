@@ -1,9 +1,6 @@
 package me.theforbiddenai.jenkinsparserkotlin.entities
 
-import me.theforbiddenai.jenkinsparserkotlin.Cache
 import org.jsoup.nodes.Element
-
-private val enumCache = Cache()
 
 data class EnumInformation internal constructor(
     val classInfo: ClassInformation,
@@ -19,18 +16,6 @@ data class EnumInformation internal constructor(
     override var rawExtraInformation: MutableMap<String, String> = mutableMapOf()
 
     init {
-        val foundInformation = enumCache.getInformation(url)
-
-        if (foundInformation != null) {
-            val foundEnum = foundInformation as EnumInformation
-            retrieveDataFromCache(foundEnum)
-        } else {
-            retrieveDataFromElement()
-            enumCache.addInformation(url, this)
-        }
-    }
-
-    private fun retrieveDataFromElement() {
         val descriptionElement = enumElement.selectFirst("div.block")
 
         type = "Enum"
@@ -40,11 +25,4 @@ data class EnumInformation internal constructor(
         retrieveExtraInfo(enumElement)
     }
 
-    private fun retrieveDataFromCache(enumInfo: EnumInformation) {
-        type = enumInfo.type
-        description = enumInfo.description
-        rawDescription = enumInfo.rawDescription
-        extraInformation = enumInfo.extraInformation
-        rawExtraInformation = enumInfo.rawExtraInformation
-    }
 }

@@ -1,19 +1,22 @@
 package me.theforbiddenai.jenkinsparserkotlin
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
 import me.theforbiddenai.jenkinsparserkotlin.entities.*
 import org.jsoup.Jsoup
 
 class Jenkins(private var url: String) {
 
-    private val classList = mutableListOf<String>()
-    internal val baseURL: String
+    private val classList: MutableList<String> by lazy { retrieveClassList() }
+    internal val baseURL: String by lazy {
+        url.substring(0, url.lastIndexOf("/") + 1)
+    }
+
+    private val classCache = Cache<ClassInformation>()
     private val hiddenUnicodeRegex = "\\p{C}".toRegex()
 
     init {
         url = url.removeSuffix("/")
-        baseURL = url.substring(0, url.lastIndexOf("/") + 1)
-
-        initClassList()
     }
 
     fun search(query: String): List<Information> {
@@ -117,15 +120,26 @@ class Jenkins(private var url: String) {
      * @return The found class object
      * @throws Exception If the class is not found
      */
-    internal fun retrieveClass(className: String, limitedView: Boolean): ClassInformation {
+    private fun retrieveClass(className: String, limitedView: Boolean): ClassInformation {
         classList.filter {
             val foundClassName = it.substringAfterLast("/").removeSuffix(".html")
             return@filter foundClassName.equals(className, true)
-        }.forEach {
-            return ClassInformation(this, it, limitedView)
+        }.forEach { classUrl ->
+            return retrieveClassByUrl(classUrl, limitedView)
         }
 
         throw Exception("Failed to find a class with the name of $className")
+    }
+
+    internal fun retrieveClassByUrl(url: String, limitedView: Boolean = false): ClassInformation {
+        return if (classCache.containsUrl(url)) {
+            classCache.retrieveInformation(url)!!
+        } else {
+            val classInfo = ClassInformation(this, url, limitedView)
+            classCache.addInformation(url, classInfo)
+
+            classInfo
+        }
     }
 
     fun retrieveClass(className: String): ClassInformation {
@@ -156,7 +170,11 @@ class Jenkins(private var url: String) {
      * @return The found method object
      */
     fun retrieveMethod(classInfo: ClassInformation, methodName: String): MethodInformation {
-        return searchMethods(classInfo, methodName)[0]
+        try {
+            return searchMethods(classInfo, methodName)[0]
+        } catch (ex: Exception) {
+            throw Exception("Failed to find a method with the name of $methodName in the class ${classInfo.name}!")
+        }
     }
 
     fun retrieveMethod(className: String, methodName: String): MethodInformation {
@@ -196,10 +214,12 @@ class Jenkins(private var url: String) {
     /**
      * Pulls the names and urls of all the classes from the class list java doc page and adds them to a map
      */
-    private fun initClassList() {
-        val classDocument = Jsoup.connect(url).maxBodySize(0).get()
+    private fun retrieveClassList(): MutableList<String> = runBlocking {
+        val urlList = mutableListOf<String>()
 
+        val deferredDoc = async { Jsoup.connect(url).maxBodySize(0).ignoreHttpErrors(true) }
         val elementToSearch = if (url.contains("allclasses")) "a" else "li.circle"
+        val classDocument = deferredDoc.await().get()
 
         classDocument.select(elementToSearch).stream()
             .forEach {
@@ -209,14 +229,14 @@ class Jenkins(private var url: String) {
                 } else {
                     it.selectFirst("a").attr("href")
                 }
-                href = href.replace("../", "").trim()
 
+                href = href.replace("../", "").trim()
                 val classUrl = baseURL + href
 
-                if(!classList.contains(classUrl)) classList.add(classUrl)
+                if (!urlList.contains(classUrl)) urlList.add(classUrl)
             }
 
-
+        return@runBlocking urlList
     }
 
 }

@@ -581,10 +581,13 @@ data class ClassInformation internal constructor(
 
     private fun retrieveDataFromDocument() {
         val fullName = classDocument.selectFirst(".title")?.text() ?: "N/A"
-        val nameArgs = fullName.split("\\s+".toRegex())
+        val args = fullName.split("\\s+".toRegex()).toTypedArray()
 
-        type = if (nameArgs.size > 1) nameArgs[0] else "Class"
-        name = if (nameArgs.size > 1) nameArgs[1] else nameArgs[0]
+        type = if (args.size > 1) args[0] else "Class"
+        name = if (args.size > 1) {
+            args.copyOfRange(1, args.size)
+                .joinToString(" ")
+        } else fullName
 
         val descriptionElement = classDocument.selectFirst(".description")
             .selectFirst(".block")

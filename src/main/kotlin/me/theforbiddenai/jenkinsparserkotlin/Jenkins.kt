@@ -63,13 +63,10 @@ class Jenkins(private var url: String) {
 
                         val foundPotentialClass = classInfo.searchAllNestedClasses(potentialClassInfo)[0]
                         foundInformation.addAll(foundPotentialClass.searchAll(potentialInfo))
-                        println("OOF1")
                     } catch (ignored: Exception) {
 
                     }
                 } else {
-                    println("OOF2")
-
                     foundInformation.addAll(foundClassInfo.searchAll(modifiedQuery))
                     if (foundInformation.isEmpty()) {
                         throw Exception("Unable to find a method, enum, or field for the query $query")

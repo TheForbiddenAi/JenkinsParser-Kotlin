@@ -24,16 +24,10 @@ class Jenkins(private var url: String) {
             .toLowerCase()
         val foundInformation = mutableListOf<Information>()
 
-        var foundClassList = searchClasses(query)
-        if (foundClassList.isNotEmpty()) {
-            return foundClassList
-        }
-
-
         val queryArgs = modifiedQuery.split(".")
         lateinit var classInfo: ClassInformation
 
-        foundClassList = searchClasses(queryArgs[0])
+        val foundClassList = searchClasses(queryArgs[0])
 
         when (foundClassList.size) {
             1 -> {
@@ -48,6 +42,16 @@ class Jenkins(private var url: String) {
                 val className = foundClassInfo.name.substringBefore("<").removePrefix("<").trim().toLowerCase()
                 modifiedQuery = modifiedQuery.substringAfter(className).removePrefix(".").trim()
 
+                val previousClassName = className.substringBeforeLast(".")
+                val previousClassList = searchClasses(previousClassName)
+
+                if (previousClassList.isNotEmpty()) {
+                    val queryWithoutName = className.substringAfterLast(".")
+                    val previousClass = previousClassList[0]
+
+                    foundInformation.addAll(previousClass.searchAll(queryWithoutName))
+                }
+
                 if (modifiedQuery.isEmpty()) {
                     foundInformation.add(foundClassInfo)
 
@@ -59,10 +63,13 @@ class Jenkins(private var url: String) {
 
                         val foundPotentialClass = classInfo.searchAllNestedClasses(potentialClassInfo)[0]
                         foundInformation.addAll(foundPotentialClass.searchAll(potentialInfo))
+                        println("OOF1")
                     } catch (ignored: Exception) {
 
                     }
                 } else {
+                    println("OOF2")
+
                     foundInformation.addAll(foundClassInfo.searchAll(modifiedQuery))
                     if (foundInformation.isEmpty()) {
                         throw Exception("Unable to find a method, enum, or field for the query $query")

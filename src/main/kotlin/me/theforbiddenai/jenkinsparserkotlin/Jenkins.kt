@@ -2,6 +2,8 @@ package me.theforbiddenai.jenkinsparserkotlin
 
 import me.theforbiddenai.jenkinsparserkotlin.entities.*
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import kotlin.math.max
 
 class Jenkins(private var url: String) {
 
@@ -219,9 +221,31 @@ class Jenkins(private var url: String) {
     private fun retrieveClassList(): MutableList<String> {
         val urlList = mutableListOf<String>()
 
-        val classDocument = Jsoup.connect(url).maxBodySize(0).ignoreHttpErrors(true).get()
-        val elementToSearch = if (url.contains("allclasses")) "a" else "li.circle"
+        var classDocument: Document? = null
 
+        var retryCount = 0
+        val maxRetries = 3
+        var connected = false
+        var exception: Exception = Exception("Unable to connect to $url")
+
+        while (retryCount < maxRetries && classDocument == null) {
+            retryCount++
+            try {
+                classDocument = Jsoup.connect(url).maxBodySize(0).get()
+                connected = true
+                break
+            } catch (ex: Exception) {
+                if (retryCount == maxRetries) {
+                    exception = ex
+                }
+            }
+        }
+
+        if (!connected || classDocument == null) {
+            throw exception
+        }
+
+        val elementToSearch = if (url.contains("allclasses")) "a" else "li.circle"
 
         classDocument.select(elementToSearch).stream()
             .forEach {

@@ -410,7 +410,11 @@ data class ClassInformation internal constructor(
                 it.attr("scope").equals("row", true)
             }
             .forEach {
-                val itemName = it.text().substringAfter("$name.")
+                val className = name.substringBefore("<")
+                val itemName = it.text()
+                    .substringAfter("$className.")
+                    .substringBefore("<")
+
                 val anchorHref = it.selectFirst("a").attr("href")
 
                 val itemUrl = "${url.substringBeforeLast("/")}/$anchorHref"

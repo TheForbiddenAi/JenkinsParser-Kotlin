@@ -578,10 +578,13 @@ data class ClassInformation internal constructor(
 
     private fun retrieveLimitedView() {
         val fullName = classDocument.selectFirst(".title")?.text() ?: "N/A"
-        val nameArgs = fullName.split("\\s+".toRegex())
+        val args = fullName.split("\\s+".toRegex()).toTypedArray()
 
-        type = if (nameArgs.size > 1) nameArgs[0] else "Class"
-        name = if (nameArgs.size > 1) nameArgs[1] else nameArgs[0]
+        type = if (args.size > 1) args[0] else "Class"
+        name = if (args.size > 1) {
+            args.copyOfRange(1, args.size)
+                .joinToString(" ")
+        } else fullName
 
         nestedClassMap = retrieveLinkDataFromTable("nested.class.summary")
         nestedClassList = nestedClassMap.keys.toMutableList()
@@ -601,10 +604,7 @@ data class ClassInformation internal constructor(
         } else fullName
 
         val descriptionElement = classDocument.selectFirst(".description")
-            .selectFirst(".block")
-
-        description = descriptionElement?.text() ?: "N/A"
-        rawDescription = descriptionElement?.html() ?: "N/A"
+        retrieveDescription(descriptionElement)
 
         nestedClassMap = retrieveLinkDataFromTable("nested.class.summary")
         methodMap = getItemList("method.detail")

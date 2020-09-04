@@ -9,19 +9,14 @@ data class EnumInformation internal constructor(
     override val name: String
 ) : Information() {
 
-    override lateinit var type: String
+    override var type: String = "Enum"
     override lateinit var description: String
     override lateinit var rawDescription: String
     override var extraInformation: MutableMap<String, String> = mutableMapOf()
     override var rawExtraInformation: MutableMap<String, String> = mutableMapOf()
 
     init {
-        val descriptionElement = enumElement.selectFirst("div.block")
-
-        type = "Enum"
-        description = descriptionElement?.text() ?: "N/A"
-        rawDescription = descriptionElement?.html() ?: "N/A"
-
+        retrieveDescription(enumElement)
         retrieveExtraInfo(enumElement)
     }
 

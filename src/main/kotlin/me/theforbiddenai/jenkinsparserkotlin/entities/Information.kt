@@ -37,6 +37,38 @@ abstract class Information {
         }
     }
 
+    /**
+     * Gets the description from the given element and stores it in the `description` and `rawDescription` variables
+     *
+     * @param element The element to retrieve the description from
+     */
+    protected fun retrieveDescription(element: Element) {
+        val descElementList = element.select("div.block")
+        with(descElementList) {
+            when (size) {
+                0 -> "N/A"
+                1 -> {
+                    val descElement = descElementList[0]
+
+                    description = descElement.text()
+                    rawDescription = descElement.html()
+                }
+                else -> {
+                    val normalStrBuilder = java.lang.StringBuilder()
+                    val rawStrBuilder = java.lang.StringBuilder()
+
+                    descElementList.forEach {
+                        normalStrBuilder.append(it.html() + "<br>")
+                        rawStrBuilder.append(it.text() + "\n")
+                    }
+
+                    description = normalStrBuilder.toString().trim()
+                    rawDescription = rawStrBuilder.toString().trim()
+                }
+            }
+        }
+    }
+
 
     /**
      * An extension function to List<String> to allow for case insensitive matching on contains

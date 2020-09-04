@@ -1,6 +1,7 @@
 package me.theforbiddenai.jenkinsparserkotlin.entities
 
 import org.jsoup.nodes.Element
+import java.lang.StringBuilder
 
 data class MethodInformation internal constructor(
     val classInfo: ClassInformation,
@@ -9,20 +10,16 @@ data class MethodInformation internal constructor(
     override val name: String
 ) : Information() {
 
-    override lateinit var type: String
+    override var type: String = "Method"
     override lateinit var description: String
     override lateinit var rawDescription: String
     override var extraInformation: MutableMap<String, String> = mutableMapOf()
     override var rawExtraInformation: MutableMap<String, String> = mutableMapOf()
 
     init {
-        val descriptionElement = methodElement.selectFirst("div.block")
-
-        type = "Method"
-        description = descriptionElement?.text() ?: "N/A"
-        rawDescription = descriptionElement?.html() ?: "N/A"
-
+        retrieveDescription(methodElement)
         retrieveExtraInfo(methodElement)
     }
+
 
 }

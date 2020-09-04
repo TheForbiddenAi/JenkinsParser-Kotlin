@@ -476,11 +476,19 @@ data class ClassInformation internal constructor(
     }
 
     private fun getUrl(href: String): String {
-        return if (href.contains("../")) {
-            jenkins.baseURL + href.replace("^[^A-Za-z]+".toRegex(), "")
-        } else {
-            url.replace("$name.html", "") + href
+        val strippedName = name.substringBefore("<")
+        val packageUrl = url.substringBefore(strippedName)
+
+        return with(href) {
+            when {
+                contains("http") -> href
+                contains("../") -> jenkins.baseURL + href.replace("^[^A-Za-z]+".toRegex(), "")
+                contains("#") || contains("/") || contains(".html") -> packageUrl + href
+                contains("/") -> packageUrl + href
+                else -> url.replace("$name.html", "") + href
+            }
         }
+
     }
 
     /**
@@ -501,20 +509,19 @@ data class ClassInformation internal constructor(
 
         blockList.select("li.blockList").forEach {
 
+            val itemName = if (listId.equals("method.detail", true)) {
+                val signature = it.selectFirst(".memberSignature")?.text() ?: it.selectFirst("pre").text()
 
-            val itemName = when (listId.toLowerCase()) {
-                "method.detail" -> {
-                    val signature = it.selectFirst(".memberSignature")?.text() ?: it.selectFirst("pre").text()
+                val modifiedSignature = signature.replace(hiddenUnicodeRegex, " ")
+                    .replace(annotationRegex, "")
+                    .replace(whitespaceRegex, " ")
+                    .substringAfter("public")
+                    .trim()
 
-                    var modifiedSignature = signature.replace(hiddenUnicodeRegex, " ")
-                    modifiedSignature = modifiedSignature.replace(annotationRegex, "").replace(whitespaceRegex, " ")
-                        .substringAfter("public").trim()
-
-                    methodNameRegex.find(modifiedSignature)?.value
-                        ?: throw Exception("Failed to match method signature: $signature")
-                }
-
-                else -> it.selectFirst("h4")?.text() ?: it.selectFirst("h3").text()
+                methodNameRegex.find(modifiedSignature)?.value
+                    ?: throw Exception("Failed to match method signature: $signature")
+            } else {
+                it.selectFirst("h4")?.text() ?: it.selectFirst("h3").text()
             }
 
 

@@ -2,7 +2,7 @@
 A kotlin api, that supports java, used to easily parse jenkins javadocs
 ## Documentation
 
-### Maven Dependency
+### Dependencies
 
 <a href="https://github.com/TheForbiddenAi/JenkinsParser-Kotlin">
     <img src="https://img.shields.io/github/v/release/TheForbiddenAi/JenkinsParser-Kotlin?label=Latest%20Version" alt="Latest Version">
@@ -11,6 +11,8 @@ A kotlin api, that supports java, used to easily parse jenkins javadocs
 <br>
 
 Make sure to replace **VERSION** with the version shown above
+
+#### Maven
 
 ```xml
 <repository>
@@ -26,6 +28,19 @@ Make sure to replace **VERSION** with the version shown above
 </dependency>
 ```
 
+#### Gradle
+```gradle
+allprojects {
+    repositories {
+        maven { url 'https://jitpack.io' }
+    }
+}
+```
+```gradle
+dependencies {
+    implementation 'com.github.TheForbiddenAi:JenkinsParser-Kotlin:VERSION'
+}
+```
 
 ### Initialization
 First, you must create an instance of `Jenkins`

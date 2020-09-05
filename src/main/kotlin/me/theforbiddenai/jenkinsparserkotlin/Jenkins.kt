@@ -31,13 +31,16 @@ class Jenkins(private var url: String) {
 
         val foundClassList = searchClasses(queryArgs[0])
 
+        if (queryArgs.size == 1) {
+            return foundClassList
+        }
+
         when (foundClassList.size) {
             1 -> {
                 classInfo = foundClassList[0]
 
                 val foundClassInfo =
                     classInfo.locateNestedClass(queryArgs.toTypedArray().copyOfRange(1, queryArgs.size).toList())
-
 
                 val oldQuery = modifiedQuery
 

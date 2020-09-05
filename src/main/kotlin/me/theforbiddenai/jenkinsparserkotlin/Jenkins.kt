@@ -3,7 +3,6 @@ package me.theforbiddenai.jenkinsparserkotlin
 import me.theforbiddenai.jenkinsparserkotlin.entities.*
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
-import kotlin.math.max
 
 class Jenkins(private var url: String) {
 
@@ -20,79 +19,73 @@ class Jenkins(private var url: String) {
     }
 
     fun search(query: String): List<Information> {
-        var modifiedQuery = query.replace("#", ".")
+        val modifiedQuery = query.replace("#", ".")
             .replace(hiddenUnicodeRegex, "")
             .removeSuffix(".")
             .toLowerCase()
         val foundInformation = mutableListOf<Information>()
 
         val queryArgs = modifiedQuery.split(".")
-        lateinit var classInfo: ClassInformation
 
         val foundClassList = searchClasses(queryArgs[0])
+
+        if (foundClassList.isEmpty()) {
+            throw Exception("Unable to find a class for the query $query")
+        }
 
         if (queryArgs.size == 1) {
             return foundClassList
         }
 
-        when (foundClassList.size) {
-            1 -> {
-                classInfo = foundClassList[0]
+        foundClassList.forEach {
+            val foundClassInfo =
+                it.locateNestedClass(queryArgs.toTypedArray().copyOfRange(1, queryArgs.size).toList())
 
-                val foundClassInfo =
-                    classInfo.locateNestedClass(queryArgs.toTypedArray().copyOfRange(1, queryArgs.size).toList())
+            val className = foundClassInfo.name
+                .substringBefore("<")
+                .trim()
+                .toLowerCase()
 
-                val oldQuery = modifiedQuery
+            val queryNoName = modifiedQuery.substringAfter(className)
+                .removePrefix(".")
+                .trim()
 
-                val className = foundClassInfo.name.substringBefore("<").removePrefix("<").trim().toLowerCase()
-                modifiedQuery = modifiedQuery.substringAfter(className).removePrefix(".").trim()
-
+            if (queryArgs.size > 1) {
                 val previousClassName = className.substringBeforeLast(".")
+
                 val previousClassList = searchClasses(previousClassName)
 
                 if (previousClassList.isNotEmpty()) {
                     val queryWithoutName = className.substringAfterLast(".")
-                    val previousClass = previousClassList[0]
+                    if (!previousClassName.equals(queryWithoutName, true)) {
+                        val previousClass = previousClassList[0]
 
-                    foundInformation.addAll(previousClass.searchAll(queryWithoutName))
-                }
-
-                if (modifiedQuery.isEmpty()) {
-                    foundInformation.add(foundClassInfo)
-
-                    try {
-                        val potentialInfo = oldQuery.replaceBeforeLast(".", "").removePrefix(".").trim()
-                        val potentialClassInfo =
-                            oldQuery.substringAfter(classInfo.name.toLowerCase(), "").removePrefix(".")
-                                .substringBefore(".", "").trim()
-
-                        val foundPotentialClass = classInfo.searchAllNestedClasses(potentialClassInfo)[0]
-                        foundInformation.addAll(foundPotentialClass.searchAll(potentialInfo))
-                    } catch (ignored: Exception) {
-
-                    }
-                } else {
-                    foundInformation.addAll(foundClassInfo.searchAll(modifiedQuery))
-                    if (foundInformation.isEmpty()) {
-                        throw Exception("Unable to find a method, enum, or field for the query $query")
+                        foundInformation.addAll(previousClass.searchAll(queryWithoutName))
                     }
                 }
             }
-            0 -> {
-                throw Exception("Unable to find a class for the query $query")
-            }
-            else -> {
-                foundClassList.forEach {
-                    val foundClassInfo =
-                        it.locateNestedClass(queryArgs.toTypedArray().copyOfRange(1, queryArgs.size).toList())
-                    val queryWithoutName = modifiedQuery.substringAfter(foundClassInfo.name).trim().removePrefix(".")
 
-                    if (queryWithoutName.isEmpty()) {
-                        foundInformation.add(foundClassInfo)
-                    } else {
-                        foundInformation.addAll(foundClassInfo.searchAll(queryWithoutName))
-                    }
+            if (queryNoName.isEmpty()) {
+                foundInformation.add(foundClassInfo)
+
+                try {
+                    val potentialInfo = modifiedQuery.replaceBeforeLast(".", "")
+                        .removePrefix(".")
+                        .trim()
+
+                    val potentialClassInfo =
+                        modifiedQuery.substringAfter(it.name.toLowerCase(), "")
+                            .removePrefix(".")
+                            .substringBefore(".", "")
+                            .trim()
+
+                    val foundPotentialClass = it.searchAllNestedClasses(potentialClassInfo)[0]
+                    foundInformation.addAll(foundPotentialClass.searchAll(potentialInfo))
+                } catch (ignored: Exception) {
+
                 }
+            } else {
+                foundInformation.addAll(foundClassInfo.searchAll(queryNoName))
             }
         }
 

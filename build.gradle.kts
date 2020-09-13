@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.github.theforbiddenai"
-version = "1.4.4"
+version = "1.4.1"
 
 repositories {
     jcenter()

@@ -52,11 +52,16 @@ class Jenkins(private var url: String) {
 
             if (queryArgs.size > 1) {
                 val previousClassName = className.substringBeforeLast(".")
-
                 val previousClassList = searchClasses(previousClassName)
 
                 if (previousClassList.isNotEmpty()) {
-                    val queryWithoutName = className.substringAfterLast(".")
+                    var queryWithoutName = modifiedQuery.replace(className, "")
+                        .removeSuffix(".")
+
+                    if (queryWithoutName.isBlank()) {
+                        queryWithoutName = className.substringAfterLast(".")
+                    }
+
                     if (!previousClassName.equals(queryWithoutName, true)) {
                         val previousClass = previousClassList[0]
 

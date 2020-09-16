@@ -6,7 +6,7 @@ import org.jsoup.nodes.Document
 
 class Jenkins(private var url: String) {
 
-    val classList: MutableList<String> by lazy { retrieveClassList() }
+    val classMap: Map<String, String> by lazy { retrieveClassList() }
     internal val baseURL: String by lazy {
         url.substring(0, url.lastIndexOf("/") + 1)
     }
@@ -37,7 +37,53 @@ class Jenkins(private var url: String) {
             return foundClassList
         }
 
-        foundClassList.forEach {
+        val resultUrlMap = mutableMapOf<String, String>()
+
+        for (index in queryArgs.indices) {
+            val qArg = queryArgs[index]
+
+            classMap.filter { (_, className) ->
+
+                val compareName = if (className.contains(".") && index != 0) {
+                    val previousIndex = className.count { ".".contains(it) }
+
+                    if (previousIndex > index) {
+                        qArg
+                    } else {
+                        val stringBuilder = StringBuilder()
+                        for (prevIndex in 0..previousIndex) {
+                            stringBuilder.append("${queryArgs[prevIndex]}.")
+                        }
+
+                        stringBuilder.removeSuffix(".")
+                            .toString()
+                            .trim()
+                    }
+
+
+                } else {
+                    qArg
+                }
+
+                return@filter className.equals(compareName, true)
+            }.forEach { (classUrl, className) ->
+                resultUrlMap[classUrl] = className
+            }
+        }
+
+        val classInfoList = resultUrlMap.map { (classUrl, _) -> ClassInformation(this, classUrl) }
+
+
+        classInfoList.forEach {
+
+            val lowercaseClassName = it.name.toLowerCase()
+            val memberName = modifiedQuery.replace(lowercaseClassName, "").removePrefix(".")
+
+            foundInformation.addAll(it.searchAll(memberName))
+        }
+
+
+        /*foundClassList.forEach {
             val foundClassInfo =
                 it.locateNestedClass(queryArgs.toTypedArray().copyOfRange(1, queryArgs.size).toList())
 
@@ -92,7 +138,7 @@ class Jenkins(private var url: String) {
             } else {
                 foundInformation.addAll(foundClassInfo.searchAll(queryNoName))
             }
-        }
+        }*/
 
         return foundInformation
 
@@ -107,12 +153,10 @@ class Jenkins(private var url: String) {
     fun searchClasses(className: String): List<ClassInformation> {
         val classInfoList: MutableList<ClassInformation> = mutableListOf()
 
-        classList.filter {
-            val foundClassName = it.substringAfterLast("/").removeSuffix(".html")
-            return@filter foundClassName.equals(className, true)
-        }.forEach {
-            classInfoList.add(ClassInformation(this, it))
-        }
+        classMap.filter { (_, classListName) -> classListName.equals(className, true) }
+            .forEach { (classUrl, _) ->
+                classInfoList.add(ClassInformation(this, classUrl))
+            }
 
         return classInfoList
     }
@@ -126,12 +170,10 @@ class Jenkins(private var url: String) {
      * @throws Exception If the class is not found
      */
     private fun retrieveClass(className: String, limitedView: Boolean): ClassInformation {
-        classList.filter {
-            val foundClassName = it.substringAfterLast("/").removeSuffix(".html")
-            return@filter foundClassName.equals(className, true)
-        }.forEach { classUrl ->
-            return retrieveClassByUrl(classUrl, limitedView)
-        }
+        classMap.filter { (_, classListName) -> classListName.equals(className, true) }
+            .forEach { (classUrl, _) ->
+                return retrieveClassByUrl(classUrl, limitedView)
+            }
 
         throw Exception("Failed to find a class with the name of $className")
     }
@@ -219,21 +261,49 @@ class Jenkins(private var url: String) {
     /**
      * Pulls the names and urls of all the classes from the class list java doc page and adds them to a map
      */
-    private fun retrieveClassList(): MutableList<String> {
-        val urlList = mutableListOf<String>()
+    private fun retrieveClassList(): Map<String, String> {
+        val urlList = mutableMapOf<String, String>()
+        val classDocument = retrieveClassDocument()
 
+        val anchorList = if (url.contains("allclasses")) {
+            classDocument.select("a")
+        } else {
+            classDocument.selectFirst("div.contentContainer").select("a")
+        }
+
+        anchorList.forEach {
+            val href = it.attr("href")
+                .replace("../", "")
+                .trim()
+
+            val classUrl = baseURL + href
+            val className = it.text()
+
+            if (!urlList.contains(classUrl)) {
+                urlList[classUrl] = className
+            }
+        }
+
+        return urlList
+    }
+
+    /**
+     * Retrieves the [Document] which contains the list of available classes/interfaces/etc
+     *
+     * @return The found [Document]
+     * @throws Exception If the [Document] can not be retrieved
+     */
+    private fun retrieveClassDocument(): Document {
         var classDocument: Document? = null
 
         var retryCount = 0
         val maxRetries = 3
-        var connected = false
         var exception: Exception = Exception("Unable to connect to $url")
 
         while (retryCount < maxRetries && classDocument == null) {
             retryCount++
             try {
                 classDocument = Jsoup.connect(url).maxBodySize(0).get()
-                connected = true
                 break
             } catch (ex: Exception) {
                 if (retryCount == maxRetries) {
@@ -242,28 +312,11 @@ class Jenkins(private var url: String) {
             }
         }
 
-        if (!connected || classDocument == null) {
+        if (classDocument == null) {
             throw exception
         }
 
-        val elementToSearch = if (url.contains("allclasses")) "a" else "li.circle"
-
-        classDocument.select(elementToSearch).stream()
-            .forEach {
-
-                var href = if (it.hasAttr("href")) {
-                    it.attr("href")
-                } else {
-                    it.selectFirst("a").attr("href")
-                }
-
-                href = href.replace("../", "").trim()
-                val classUrl = baseURL + href
-
-                if (!urlList.contains(classUrl)) urlList.add(classUrl)
-            }
-
-        return urlList
+        return classDocument
     }
 
 }

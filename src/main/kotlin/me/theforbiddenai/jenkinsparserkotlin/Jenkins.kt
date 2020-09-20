@@ -11,8 +11,7 @@ class Jenkins(private var url: String) {
         url.substring(0, url.lastIndexOf("/") + 1)
     }
 
-    private val classCache = Cache<ClassInformation>()
-    private val hiddenUnicodeRegex = "\\p{C}".toRegex()
+    internal val classCache = Cache<ClassInformation>()
 
     init {
         url = url.removeSuffix("/")
@@ -20,22 +19,12 @@ class Jenkins(private var url: String) {
 
     fun search(query: String): List<Information> {
         val modifiedQuery = query.replace("#", ".")
-            .replace(hiddenUnicodeRegex, "")
+            .replace("\\p{C}".toRegex(), "") // Removes hidden unicode
             .removeSuffix(".")
             .toLowerCase()
+
         val foundInformation = mutableListOf<Information>()
-
         val queryArgs = modifiedQuery.split(".")
-
-        val foundClassList = searchClasses(queryArgs[0])
-
-        if (foundClassList.isEmpty()) {
-            throw Exception("Unable to find a class for the query $query")
-        }
-
-        if (queryArgs.size == 1) {
-            return foundClassList
-        }
 
         val resultUrlMap = mutableMapOf<String, String>()
 
@@ -71,74 +60,19 @@ class Jenkins(private var url: String) {
             }
         }
 
-        val classInfoList = resultUrlMap.map { (classUrl, _) -> ClassInformation(this, classUrl) }
-
+        val classInfoList = resultUrlMap.map { (classUrl, _) -> retrieveClassByUrl(classUrl, false) }
 
         classInfoList.forEach {
-
             val lowercaseClassName = it.name.toLowerCase()
-            val memberName = modifiedQuery.replace(lowercaseClassName, "").removePrefix(".")
+            val memberName = modifiedQuery.replaceFirst(lowercaseClassName, "").removePrefix(".")
+
+            if (memberName.isBlank() && modifiedQuery.equals(lowercaseClassName, true)) {
+                foundInformation.add(it)
+                return@forEach
+            }
 
             foundInformation.addAll(it.searchAll(memberName))
         }
-
-
-        /*foundClassList.forEach {
-            val foundClassInfo =
-                it.locateNestedClass(queryArgs.toTypedArray().copyOfRange(1, queryArgs.size).toList())
-
-            val className = foundClassInfo.name
-                .substringBefore("<")
-                .trim()
-                .toLowerCase()
-
-            val queryNoName = modifiedQuery.substringAfter(className)
-                .removePrefix(".")
-                .trim()
-
-            if (queryArgs.size > 1) {
-                val previousClassName = className.substringBeforeLast(".")
-                val previousClassList = searchClasses(previousClassName)
-
-                if (previousClassList.isNotEmpty()) {
-                    var queryWithoutName = modifiedQuery.replace(className, "")
-                        .removeSuffix(".")
-
-                    if (queryWithoutName.isBlank()) {
-                        queryWithoutName = className.substringAfterLast(".")
-                    }
-
-                    if (!previousClassName.equals(queryWithoutName, true)) {
-                        val previousClass = previousClassList[0]
-
-                        foundInformation.addAll(previousClass.searchAll(queryWithoutName))
-                    }
-                }
-            }
-
-            if (queryNoName.isEmpty()) {
-                foundInformation.add(foundClassInfo)
-
-                try {
-                    val potentialInfo = modifiedQuery.replaceBeforeLast(".", "")
-                        .removePrefix(".")
-                        .trim()
-
-                    val potentialClassInfo =
-                        modifiedQuery.substringAfter(it.name.toLowerCase(), "")
-                            .removePrefix(".")
-                            .substringBefore(".", "")
-                            .trim()
-
-                    val foundPotentialClass = it.searchAllNestedClasses(potentialClassInfo)[0]
-                    foundInformation.addAll(foundPotentialClass.searchAll(potentialInfo))
-                } catch (ignored: Exception) {
-
-                }
-            } else {
-                foundInformation.addAll(foundClassInfo.searchAll(queryNoName))
-            }
-        }*/
 
         return foundInformation
 
@@ -155,7 +89,7 @@ class Jenkins(private var url: String) {
 
         classMap.filter { (_, classListName) -> classListName.equals(className, true) }
             .forEach { (classUrl, _) ->
-                classInfoList.add(ClassInformation(this, classUrl))
+                classInfoList.add(retrieveClassByUrl(classUrl, false))
             }
 
         return classInfoList
@@ -169,13 +103,17 @@ class Jenkins(private var url: String) {
      * @return The found class object
      * @throws Exception If the class is not found
      */
-    private fun retrieveClass(className: String, limitedView: Boolean): ClassInformation {
+    internal fun retrieveClass(className: String, limitedView: Boolean): ClassInformation {
         classMap.filter { (_, classListName) -> classListName.equals(className, true) }
             .forEach { (classUrl, _) ->
                 return retrieveClassByUrl(classUrl, limitedView)
             }
 
         throw Exception("Failed to find a class with the name of $className")
+    }
+
+    fun retrieveClass(className: String): ClassInformation {
+        return retrieveClass(className, false)
     }
 
     internal fun retrieveClassByUrl(url: String, limitedView: Boolean = false): ClassInformation {
@@ -187,10 +125,6 @@ class Jenkins(private var url: String) {
 
             classInfo
         }
-    }
-
-    fun retrieveClass(className: String): ClassInformation {
-        return retrieveClass(className, false)
     }
 
     /**

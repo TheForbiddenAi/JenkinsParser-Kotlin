@@ -1,13 +1,12 @@
 package me.theforbiddenai.jenkinsparserkotlin.entities
 
 import org.jsoup.nodes.Element
-import java.lang.StringBuilder
 
 data class MethodInformation internal constructor(
     val classInfo: ClassInformation,
     val methodElement: Element,
     override val url: String,
-    override val name: String
+    override var name: String
 ) : Information() {
 
     override var type: String = "Method"

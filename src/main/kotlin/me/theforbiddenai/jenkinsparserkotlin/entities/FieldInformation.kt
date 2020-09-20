@@ -6,7 +6,7 @@ data class FieldInformation internal constructor(
     val classInfo: ClassInformation,
     val fieldElement: Element,
     override val url: String,
-    override val name: String
+    override var name: String
 ) : Information() {
 
     override var type: String = "Field"

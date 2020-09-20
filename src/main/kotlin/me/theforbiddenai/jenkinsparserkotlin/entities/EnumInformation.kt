@@ -6,7 +6,7 @@ data class EnumInformation internal constructor(
     val classInfo: ClassInformation,
     val enumElement: Element,
     override val url: String,
-    override val name: String
+    override var name: String
 ) : Information() {
 
     override var type: String = "Enum"

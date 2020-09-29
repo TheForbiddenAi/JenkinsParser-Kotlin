@@ -63,10 +63,10 @@ class Jenkins(private var url: String) {
         val classInfoList = resultUrlMap.map { (classUrl, _) -> retrieveClassByUrl(classUrl, false) }
 
         classInfoList.forEach {
-            val lowercaseClassName = it.name.toLowerCase()
-            val memberName = modifiedQuery.replaceFirst(lowercaseClassName, "").removePrefix(".")
+            val modifiedName = it.name.substringBefore("<")
+            val memberName = modifiedQuery.replaceFirst(modifiedName, "", true).removePrefix(".")
 
-            if (memberName.isBlank() && modifiedQuery.equals(lowercaseClassName, true)) {
+            if (memberName.isBlank() && modifiedQuery.equals(modifiedName, true)) {
                 foundInformation.add(it)
                 return@forEach
             }

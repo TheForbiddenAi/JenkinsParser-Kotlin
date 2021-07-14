@@ -170,7 +170,7 @@ class Jenkins(private var url: String) {
      * @return The found enum object
      */
     fun retrieveEnum(classInfo: ClassInformation, enumName: String): EnumInformation {
-        return classInfo.retrieveEnum(enumName);
+        return classInfo.retrieveEnum(enumName)
     }
 
     fun retrieveEnum(className: String, enumName: String): EnumInformation {
@@ -185,7 +185,7 @@ class Jenkins(private var url: String) {
      * @return The found field object
      */
     fun retrieveField(classInfo: ClassInformation, fieldName: String): FieldInformation {
-        return classInfo.retrieveField(fieldName);
+        return classInfo.retrieveField(fieldName)
     }
 
     fun retrieveField(className: String, fieldName: String): FieldInformation {
@@ -199,18 +199,25 @@ class Jenkins(private var url: String) {
         val urlList = mutableMapOf<String, String>()
         val classDocument = retrieveClassDocument()
 
-        val anchorList = if (url.contains("allclasses")) {
-            classDocument.select("a")
-        } else {
-            classDocument.selectFirst("div.contentContainer").select("a")
+        val anchorList = when {
+            url.contains("allclasses") -> classDocument.select("a")
+            classDocument.selectFirst("div.contentContainer") != null -> {
+                classDocument.selectFirst("div.contentContainer").select("a")
+            }
+            else -> {
+                val main = classDocument.selectFirst("main")
+                main.selectFirst("div.header").remove()
+                main.select("a")
+            }
         }
+
 
         anchorList.forEach {
             val href = it.attr("href")
                 .replace("../", "")
                 .trim()
 
-            val classUrl = baseURL + href
+            val classUrl = if (href.contains("http", true)) href else baseURL + href
             val className = it.text()
 
             if (!urlList.contains(classUrl)) {

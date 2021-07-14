@@ -39,12 +39,10 @@ data class ClassInformation internal constructor(
     var enumList: MutableList<String> = mutableListOf()
     var fieldList: MutableList<String> = mutableListOf()
 
-    private var inheritedNestedClassMap: MutableMap<String, String> = mutableMapOf()
     private var inheritedMethodMap: MutableMap<String, String> = mutableMapOf()
     private var inheritedEnumMap: MutableMap<String, String> = mutableMapOf()
     private var inheritedFieldMap: MutableMap<String, String> = mutableMapOf()
 
-    var inheritedNestedClassList: MutableList<String> = mutableListOf()
     var inheritedMethodList: MutableList<String> = mutableListOf()
     var inheritedEnumList: MutableList<String> = mutableListOf()
     var inheritedFieldList: MutableList<String> = mutableListOf()
@@ -85,7 +83,6 @@ data class ClassInformation internal constructor(
         val foundNestedClasses: MutableList<ClassInformation> = mutableListOf()
 
         foundNestedClasses.addAll(handleInfoNotFoundError(query) { retrieveNestedClass(it, limitedView) })
-        foundNestedClasses.addAll(handleInfoNotFoundError(query) { retrieveInheritedNestedClass(it, limitedView) })
 
         return foundNestedClasses
     }
@@ -116,28 +113,6 @@ data class ClassInformation internal constructor(
 
     fun retrieveNestedClass(query: String): ClassInformation {
         return retrieveNestedClass(query, false)
-    }
-
-    /**
-     * Retrieves an inherited nested class with the specified name
-     *
-     * @param query The name of the inherited nested class being searched for
-     * @param limitedView Whether or not to retrieve the limited class view
-     * @return Returns the found inherited nested classes
-     * @throws Exception If the inherited nested class is not found
-     */
-    private fun retrieveInheritedNestedClass(query: String, limitedView: Boolean): ClassInformation {
-        if (inheritedNestedClassList.containsIgnoreCase(query)) {
-            val foundNestedClasses: List<ClassInformation> =
-                retrieveInheritedData(inheritedNestedClassMap, query, limitedView)
-            if (foundNestedClasses.isNotEmpty()) return foundNestedClasses[0]
-        }
-
-        throw Exception("Could not find an inherited nested class/interface with the name of $query in the class $name")
-    }
-
-    fun retrieveInheritedNestedClass(query: String): ClassInformation {
-        return retrieveInheritedNestedClass(query, false)
     }
 
     /**
@@ -282,8 +257,6 @@ data class ClassInformation internal constructor(
 
                     fieldInfo
                 }
-
-
             }
         }
         throw Exception("Could not find a field with the name of $query in the class $name")
@@ -361,7 +334,6 @@ data class ClassInformation internal constructor(
                 val classInformation = jenkins.retrieveClassByUrl(classUrl, limitedClassView)
 
                 when (inheritedMap) {
-                    inheritedNestedClassMap -> foundInfoMap.add(classInformation)
                     inheritedMethodMap -> foundInfoMap.addAll(classInformation.searchMethods(infoName))
                     inheritedEnumMap -> foundInfoMap.add(classInformation.retrieveEnum(infoName))
                     inheritedFieldMap -> foundInfoMap.add(classInformation.retrieveField(infoName))
@@ -397,29 +369,27 @@ data class ClassInformation internal constructor(
     private fun retrieveLinkDataFromTable(tableId: String): MutableMap<String, String> {
         val foundDataMap = mutableMapOf<String, String>()
 
-        val anchor = classDocument.selectFirst("a[id=$tableId]")
+        val anchor = classDocument.getElementById(tableId)
             ?: classDocument.selectFirst("a[name=$tableId]")
             ?: return foundDataMap
 
-        val blockList = anchor.parent()
+        val parent = anchor.parent()
 
-        val tableRows = blockList.select("tr") ?: return foundDataMap
+        val tableRows = parent.select("tr") ?: return foundDataMap
 
-        tableRows.select(".colSecond")
-            .filter {
-                it.attr("scope").equals("row", true)
-            }
-            .forEach {
-                val className = name.substringBefore("<")
-                val itemName = it.text()
-                    .substringAfter("$className.")
-                    .substringBefore("<")
+        tableRows.select(".colSecond").filter {
+            it.attr("scope").equals("row", true)
+        }.forEach {
+            val className = name.substringBefore("<")
+            val itemName = it.text()
+                .substringAfter("$className.")
+                .substringBefore("<")
 
-                val anchorHref = it.selectFirst("a").attr("href")
+            val anchorHref = it.selectFirst("a").attr("href")
 
-                val itemUrl = "${url.substringBeforeLast("/")}/$anchorHref"
+            val itemUrl = "${url.substringBeforeLast("/")}/$anchorHref"
 
-                foundDataMap[itemName] = itemUrl
+            foundDataMap[itemName] = itemUrl
             }
 
 
@@ -436,45 +406,30 @@ data class ClassInformation internal constructor(
     private fun retrieveInheritedDataFromTable(tableId: String): MutableMap<String, String> {
         val foundDataMap = mutableMapOf<String, String>()
 
-        val anchor = classDocument.selectFirst("a[id=$tableId]")
+        val child = classDocument.getElementById(tableId)
             ?: classDocument.selectFirst("a[name=$tableId]")
             ?: return foundDataMap
 
+        val parent = if (child.tagName().equals("section", true)) child else child.parent()
 
-        val blockList = anchor.parent()
+        val divList = parent.select("div.inheritedList")
+            ?: parent.select("div.inherited-list")
+            ?: parent.select("li.blocklist")
 
-        val inheritedAnchorList = blockList.select("a").filter {
-            val attr = if (it.hasAttr("id")) it.attr("id") else it.attr("name")
-            return@filter attr.contains("inherited", true)
-        }
-
-        inheritedAnchorList.forEach { foundAnchor ->
-            val parentElement = foundAnchor.parent();
-
-            val inheritedList =
-                parentElement.selectFirst("li.blocklist") ?: parentElement.selectFirst("div.inheritedList")
-
-            val headerElement = inheritedList.selectFirst("h3") ?: inheritedList.selectFirst("h2")
-            val headerAnchorElement = headerElement.selectFirst("a")
-
-            val href = headerAnchorElement.attr("href")
-            val newUrl = getUrl(href)
-
-            if (tableId.equals("nested.class.summary", true)) {
-                val className = headerAnchorElement.text()
-                foundDataMap[className] = newUrl
-            } else {
-                val itemList = inheritedList.selectFirst("code").select("a")
-                itemList.forEach {
-                    foundDataMap[it.text()] = newUrl
-                }
-            }
-
+        divList.forEach { div ->
+            val anchorList = div.selectFirst("code").select("a")
+            anchorList.forEach { foundDataMap[it.text()] = getUrl(it.attr("href")) }
         }
 
         return foundDataMap
     }
 
+    /**
+     * Retrieves a functioning URL from an href attribute
+     *
+     * @param href The href attribute
+     * @return A string containing the URL
+     */
     private fun getUrl(href: String): String {
         val strippedName = name.substringBefore("<")
         val packageUrl = url.substringBefore(strippedName)
@@ -501,16 +456,17 @@ data class ClassInformation internal constructor(
     private fun getItemList(listId: String): MutableMap<String, Element> {
         val returnMap = mutableMapOf<String, Element>()
 
-        val anchor = classDocument.selectFirst("a[id=$listId]")
+        val anchor = classDocument.getElementById(listId)
             ?: classDocument.selectFirst("a[name=$listId]")
             ?: return returnMap
 
-        val blockList = anchor.parent()
+        val parent = if (anchor.tagName().equals("section", true)) anchor else anchor.parent()
 
-        blockList.select("li.blockList").forEach {
-
+        parent.select("li").forEach {
             val itemName = if (listId.equals("method.detail", true)) {
-                val signature = it.selectFirst(".memberSignature")?.text() ?: it.selectFirst("pre").text()
+                val signature = if (it.hasClass("blockList")) {
+                    it.selectFirst(".memberSignature")?.text() ?: it.selectFirst("pre").text()
+                } else it.selectFirst("div.member-signature")?.text() ?: return@forEach
 
                 val modifiedSignature = signature.replace(hiddenUnicodeRegex, " ")
                     .replace(annotationRegex, "")
@@ -568,9 +524,8 @@ data class ClassInformation internal constructor(
      */
     private fun checkForNestedClass(classInfo: ClassInformation, query: String): ClassInformation {
         val nestedClassList = classInfo.nestedClassList
-        val inheritedNestedClassList = classInfo.inheritedNestedClassList
 
-        if (nestedClassList.containsIgnoreCase(query) || inheritedNestedClassList.containsIgnoreCase(query)) {
+        if (nestedClassList.containsIgnoreCase(query)) {
             return classInfo.searchAllNestedClasses(query, true)[0]
         }
         return classInfo
@@ -588,20 +543,10 @@ data class ClassInformation internal constructor(
 
         nestedClassMap = retrieveLinkDataFromTable("nested.class.summary")
         nestedClassList = nestedClassMap.keys.toMutableList()
-
-        inheritedNestedClassMap = retrieveInheritedDataFromTable("nested.class.summary")
-        inheritedNestedClassList = inheritedNestedClassMap.keys.toMutableList()
     }
 
     private fun retrieveDataFromDocument() {
-        val fullName = classDocument.selectFirst(".title")?.text() ?: "N/A"
-        val args = fullName.split("\\s+".toRegex()).toTypedArray()
-
-        type = if (args.size > 1) args[0] else "Class"
-        name = if (args.size > 1) {
-            args.copyOfRange(1, args.size)
-                .joinToString(" ")
-        } else fullName
+        retrieveLimitedView()
 
         val descriptionElement = classDocument.selectFirst(".description")
         retrieveDescription(descriptionElement)
@@ -616,12 +561,10 @@ data class ClassInformation internal constructor(
         enumList = enumMap.keys.toMutableList()
         fieldList = fieldMap.keys.toMutableList()
 
-        inheritedNestedClassMap = retrieveInheritedDataFromTable("nested.class.summary")
         inheritedMethodMap = retrieveInheritedDataFromTable("method.summary")
         inheritedEnumMap = retrieveInheritedDataFromTable("enum.constant.summary")
         inheritedFieldMap = retrieveInheritedDataFromTable("field.summary")
 
-        inheritedNestedClassList = inheritedNestedClassMap.keys.toMutableList()
         inheritedMethodList = inheritedMethodMap.keys.toMutableList()
         inheritedEnumList = inheritedEnumMap.keys.toMutableList()
         inheritedFieldList = inheritedFieldMap.keys.toMutableList()

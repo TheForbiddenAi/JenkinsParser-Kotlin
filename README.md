@@ -1,5 +1,5 @@
 # JenkinsParser-Kotlin
-A kotlin api, that supports java, used to easily parse jenkins javadocs
+A kotlin api, which also supports java, designed to easily parse jenkins javadocs
 ## Documentation
 
 ### Dependencies
